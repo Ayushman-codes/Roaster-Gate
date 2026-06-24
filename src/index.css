@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+body {
+  @apply bg-slate-50 text-slate-800 dark:bg-zinc-950 dark:text-zinc-50 transition-colors duration-200;
+  font-family: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+/* JUNO Brand Layout Themes */
+.juno-header {
+  @apply bg-[#0e5b9e] text-white border-b border-[#0b4a82] shadow-sm;
+}
+
+.juno-sub-header {
+  @apply bg-white border-b border-zinc-200 dark:bg-zinc-900 dark:border-zinc-800 text-zinc-700 dark:text-zinc-200;
+}
+
+.juno-card {
+  @apply bg-white border border-zinc-200 dark:bg-zinc-900/60 dark:border-zinc-800/80 rounded-xl p-5 shadow-xs dark:shadow-none transition-all duration-200;
+}
+
+.juno-btn-primary {
+  @apply bg-[#0e5b9e] hover:bg-[#004b87] text-white px-5 py-1.5 rounded-full text-xs font-semibold shadow-xs cursor-pointer transition duration-150 inline-flex items-center justify-center gap-1.5;
+}
+
+.juno-btn-secondary {
+  @apply bg-white hover:bg-slate-50 text-[#0e5b9e] border border-[#0e5b9e] dark:bg-zinc-950 dark:text-emerald-400 dark:border-emerald-900/30 px-5 py-1.5 rounded-full text-xs font-semibold shadow-xs cursor-pointer transition duration-150 inline-flex items-center justify-center gap-1.5;
+}
+
+/* Keyframes and Animations */
+@keyframes scan {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(220px);
+  }
+}
+
+.animate-scan-line {
+  animation: scan 2.5s ease-in-out infinite;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-zinc-50 dark:bg-zinc-950;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-200 dark:bg-zinc-800 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-zinc-300 dark:bg-zinc-700;
+}
