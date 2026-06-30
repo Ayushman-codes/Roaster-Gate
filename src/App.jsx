@@ -56,7 +56,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-800 dark:bg-zinc-950 dark:text-zinc-50 flex flex-col font-sans transition-colors duration-200 antialiased">
+    <div className="min-h-screen text-slate-800 dark:text-zinc-50 flex flex-col font-sans transition-colors duration-200 antialiased">
       {/* 1. Juno Brand Header Bar */}
       <header className="juno-header z-30 select-none">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
@@ -215,7 +215,7 @@ export default function App() {
       <SimulationPanel onUpdate={handleSimulationUpdate} />
 
       {/* Footer */}
-      <footer className="py-8 text-center text-xs text-zinc-500 border-t border-zinc-200 dark:border-zinc-900 bg-white dark:bg-zinc-950/40 font-sans mt-auto transition-colors duration-200">
+      <footer className="py-8 text-center text-xs text-zinc-600 dark:text-zinc-400 border-t border-white/45 dark:border-white/10 bg-white/35 dark:bg-zinc-950/25 backdrop-blur-2xl font-sans mt-auto transition-colors duration-200">
         <p>© 2026 JUNO CAMPUS • Digital Attendance & Secure Fingerprint Verification Module. Technical Integrity Division.</p>
       </footer>
     </div>
