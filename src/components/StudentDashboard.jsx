@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   loadDB, 
   generateBrowserFingerprint, 
@@ -8,12 +8,17 @@ import {
 import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, Megaphone, ShieldAlert, UserCheck } from "lucide-react";
 
 export default function StudentDashboard({ user, triggerRefresh, onTriggerRefresh }) {
+  const videoRef = useRef(null);
+  const scannerStreamRef = useRef(null);
+  const scannerFrameRef = useRef(null);
   const [currentUser, setCurrentUser] = useState(user);
   const [clientFingerprint, setClientFingerprint] = useState("");
   const [clientIp, setClientIp] = useState("");
   const [manualToken, setManualToken] = useState("");
   const [activeSession, setActiveSession] = useState(null);
   const [scanResult, setScanResult] = useState(null);
+  const [isCameraScanning, setIsCameraScanning] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [attendanceHistory, setAttendanceHistory] = useState([]);
 
   // JUNO Interactive Load States
@@ -50,6 +55,12 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
 
   }, [user.id, triggerRefresh]);
 
+  useEffect(() => {
+    return () => {
+      stopCameraScanner();
+    };
+  }, []);
+
   const handleRegisterDevice = () => {
     const res = registerStudentDevice(currentUser.id, clientFingerprint);
     if (res.success) {
@@ -77,6 +88,77 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     setTimeout(() => {
       setScanResult(null);
     }, 6000);
+  };
+
+  const stopCameraScanner = () => {
+    if (scannerFrameRef.current) {
+      cancelAnimationFrame(scannerFrameRef.current);
+      scannerFrameRef.current = null;
+    }
+
+    if (scannerStreamRef.current) {
+      scannerStreamRef.current.getTracks().forEach(track => track.stop());
+      scannerStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    setIsCameraScanning(false);
+  };
+
+  const startCameraScanner = async () => {
+    setCameraError("");
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is not available in this browser. Open the deployed site in Chrome or Safari over HTTPS.");
+      return;
+    }
+
+    if (!("BarcodeDetector" in window)) {
+      setCameraError("This browser cannot read QR codes from camera video. Try Chrome on Android, or paste the token manually below.");
+      return;
+    }
+
+    try {
+      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } },
+        audio: false
+      });
+
+      scannerStreamRef.current = stream;
+      setIsCameraScanning(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+
+      const scanFrame = async () => {
+        if (!videoRef.current || !scannerStreamRef.current) return;
+
+        try {
+          const codes = await detector.detect(videoRef.current);
+          if (codes.length > 0 && codes[0].rawValue) {
+            const scannedToken = codes[0].rawValue.trim();
+            stopCameraScanner();
+            handleScanSubmit(scannedToken);
+            return;
+          }
+        } catch (err) {
+          setCameraError("Could not read the camera frame. Keep the QR code centered and try again.");
+        }
+
+        scannerFrameRef.current = requestAnimationFrame(scanFrame);
+      };
+
+      scannerFrameRef.current = requestAnimationFrame(scanFrame);
+    } catch (err) {
+      stopCameraScanner();
+      setCameraError("Camera permission was blocked or no rear camera was found. Allow camera access and try again.");
+    }
   };
 
   const handleQuickScan = () => {
@@ -269,7 +351,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                         <p className="text-[10px] text-emerald-400 font-medium font-mono">{activeSession.subjectCode} - {activeSession.subjectName}</p>
                       </div>
                       <button
-                        onClick={handleQuickScan}
+                        onClick={isCameraScanning ? stopCameraScanner : startCameraScanner}
                         disabled={!isDeviceBound || !isFingerprintMatch}
                         className={`px-4 py-2 text-xs font-semibold rounded-lg shadow transition cursor-pointer ${
                           (isDeviceBound && isFingerprintMatch)
@@ -277,7 +359,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                             : "bg-slate-800 text-slate-500 border border-slate-850 cursor-not-allowed"
                         }`}
                       >
-                        Capture Camera Scan
+                        {isCameraScanning ? "Stop Camera" : "Open Camera Scanner"}
                       </button>
                     </div>
                   ) : (
@@ -291,6 +373,35 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
 
                 {/* Subnet details & manual payload */}
                 <div className="space-y-4 text-xs font-sans text-slate-600 dark:text-zinc-400">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-slate-800 dark:text-slate-200">Phone camera scanner:</h4>
+                    <div className="relative h-44 overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
+                      <video
+                        ref={videoRef}
+                        className={`h-full w-full object-cover ${isCameraScanning ? "block" : "hidden"}`}
+                        playsInline
+                        muted
+                      />
+                      {!isCameraScanning && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-slate-500">
+                          <ScanLine className="h-8 w-8 stroke-1" />
+                          <p>Tap Open Camera Scanner, then point at the teacher QR.</p>
+                        </div>
+                      )}
+                      {isCameraScanning && (
+                        <>
+                          <div className="absolute inset-6 rounded-lg border border-dashed border-emerald-400/70 pointer-events-none"></div>
+                          <div className="absolute left-8 right-8 top-1/2 h-0.5 bg-rose-500/80 animate-scan-line pointer-events-none"></div>
+                        </>
+                      )}
+                    </div>
+                    {cameraError && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
+                        {cameraError}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-2.5">
                     <h4 className="font-semibold text-slate-800 dark:text-slate-200">Location constraints:</h4>
                     <div className="space-y-1.5 font-sans">
