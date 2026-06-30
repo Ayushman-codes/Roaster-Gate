@@ -70,7 +70,7 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
       success: result.success,
       message: result.message
     });
-    setScannerStatus(result.success ? "Scan verified." : "QR read, but verification was blocked.");
+    setScannerStatus(result.message);
 
     setManualToken("");
     onTriggerRefresh();
