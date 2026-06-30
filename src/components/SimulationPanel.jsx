@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { loadDB, saveDB, generateBrowserFingerprint } from "../state/db";
+import { loadDB, saveDB, generateBrowserFingerprint, QR_WINDOW_MS } from "../state/db";
 import { Terminal, Shield, Cpu, RefreshCw, X, Radio } from "lucide-react";
 
 export default function SimulationPanel({ onUpdate }) {
@@ -24,7 +24,7 @@ export default function SimulationPanel({ onUpdate }) {
         // Generate a token for diagnostic preview
         const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
         const currentTimestamp = Date.now() + timeOffsetMs;
-        const windowTimestamp = Math.floor(currentTimestamp / 5000) * 5000;
+        const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
         const payload = {
           sessionId: activeSess.id,
           timestamp: windowTimestamp,
@@ -202,7 +202,7 @@ export default function SimulationPanel({ onUpdate }) {
                 </button>
               </div>
               <p className="text-[10px] text-slate-400 leading-normal">
-                QR tokens expire strictly in 5.0 seconds. Setting drift to +10s simulates scanning a shared screenshot later in time.
+                QR tokens expire after {(QR_WINDOW_MS / 1000).toFixed(0)} seconds. Setting drift to +10s simulates scanning a shared screenshot later in time.
               </p>
             </div>
           </div>

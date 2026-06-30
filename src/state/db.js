@@ -24,6 +24,8 @@ const DEFAULT_SIMULATION = {
 // Initial logs - start completely empty for a clean slate
 const DEFAULT_AUDIT_LOGS = [];
 
+export const QR_WINDOW_MS = 15000;
+
 // Helper to load database from localStorage or set defaults
 export function loadDB() {
   if (!localStorage.getItem("sat_db_initialized")) {
@@ -107,7 +109,7 @@ export function writeAuditLog(level, message, details) {
 }
 
 // Generate Dynamic QR Payload
-// payload refreshed every 5 seconds
+// payload refreshed on a short rolling window
 export function generateQrPayload(sessionId) {
   const db = loadDB();
   const timeOffset = db.simulation.timeOffsetSeconds * 1000;
@@ -115,17 +117,17 @@ export function generateQrPayload(sessionId) {
   const session = db.sessions.find(s => s.id === sessionId);
   const subject = session ? db.subjects.find(s => s.id === session.subjectId) : null;
 
-  // Round timestamp down to the nearest 5-second interval to stabilize current window
-  const windowTimestamp = Math.floor(currentTimestamp / 5000) * 5000;
+  // Round timestamp down to the current rolling interval to stabilize the QR window
+  const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
 
   const payload = {
-    sessionId,
-    subjectId: session?.subjectId || "",
-    teacherId: session?.teacherId || "",
-    subjectName: subject?.name || "",
-    subnet: subject?.subnet || "",
-    timestamp: windowTimestamp,
-    salt: Math.random().toString(36).substring(2, 6)
+    sid: sessionId,
+    sub: session?.subjectId || "",
+    tid: session?.teacherId || "",
+    name: subject?.name || "",
+    net: subject?.subnet || "",
+    ts: windowTimestamp,
+    x: Math.random().toString(36).substring(2, 6)
   };
 
   const jsonStr = JSON.stringify(payload);
@@ -134,7 +136,7 @@ export function generateQrPayload(sessionId) {
 
   return {
     token: encryptedPayload,
-    expiresAt: windowTimestamp + 5000,
+    expiresAt: windowTimestamp + QR_WINDOW_MS,
     timestamp: windowTimestamp
   };
 }
@@ -203,6 +205,16 @@ export function verifyAndSubmitAttendance(studentId, token) {
     return { success: false, message: "Invalid QR scan token format. (Cheating Flagged)" };
   }
 
+  payload = {
+    sessionId: payload.sessionId || payload.sid,
+    subjectId: payload.subjectId || payload.sub,
+    teacherId: payload.teacherId || payload.tid,
+    subjectName: payload.subjectName || payload.name,
+    subnet: payload.subnet || payload.net,
+    timestamp: payload.timestamp || payload.ts,
+    salt: payload.salt || payload.x
+  };
+
   let session = db.sessions.find(s => s.id === payload.sessionId);
   if (!session) {
     if (!payload.subjectId) {
@@ -247,13 +259,13 @@ export function verifyAndSubmitAttendance(studentId, token) {
     return { success: false, message: "Access Denied: Different device fingerprint detected (Cheating Flagged)." };
   }
 
-  // 3. Check Dynamic QR Time-To-Live (5 seconds TTL)
+  // 3. Check Dynamic QR Time-To-Live
   const tokenAge = scanTime - payload.timestamp;
-  if (tokenAge < 0 || tokenAge > 5000) {
+  if (tokenAge < 0 || tokenAge > QR_WINDOW_MS) {
     writeAuditLog(
       "CRITICAL",
       `Cheating Flagged: Expired QR Scan / Screenshot sharing by ${student.name}`,
-      `QR code age: ${(tokenAge / 1000).toFixed(1)}s (Exceeded 5.0s TTL limit). Token timestamp: ${payload.timestamp}, Scan timestamp: ${scanTime}. IP: ${clientIp}`
+      `QR code age: ${(tokenAge / 1000).toFixed(1)}s (Exceeded ${(QR_WINDOW_MS / 1000).toFixed(1)}s TTL limit). Token timestamp: ${payload.timestamp}, Scan timestamp: ${scanTime}. IP: ${clientIp}`
     );
     return { success: false, message: "Access Denied: Expired QR Code (Screenshot sharing or delayed scanning detected)." };
   }

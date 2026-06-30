@@ -4,6 +4,7 @@ import {
   startTeacherSession, 
   endTeacherSession, 
   generateQrPayload, 
+  QR_WINDOW_MS,
   submitManualOverride 
 } from "../state/db";
 import { QRCodeSVG } from "qrcode.react";
@@ -17,7 +18,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
   
   // Live QR States
   const [qrToken, setQrToken] = useState("");
-  const [timeLeft, setTimeLeft] = useState(5.0); // 5 seconds timer
+  const [timeLeft, setTimeLeft] = useState(QR_WINDOW_MS / 1000);
   const [sessionEnrolledStudents, setSessionEnrolledStudents] = useState([]);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
 
@@ -84,13 +85,13 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
       const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
       const currentTimestamp = Date.now() + timeOffsetMs;
       
-      // Calculate milliseconds left in the current 5-second interval
-      const msLeft = 5000 - (currentTimestamp % 5000);
+      // Calculate milliseconds left in the current rolling interval
+      const msLeft = QR_WINDOW_MS - (currentTimestamp % QR_WINDOW_MS);
       const secondsLeft = (msLeft / 1000);
       setTimeLeft(secondsLeft);
 
       // If we are close to the transition boundary, update the token
-      if (secondsLeft >= 4.9 || secondsLeft <= 0.1) {
+      if (secondsLeft >= (QR_WINDOW_MS / 1000) - 0.1 || secondsLeft <= 0.1) {
         updateQR();
         // Trigger list reload in case new student scanned
         const records = db.attendance.filter(a => a.sessionId === activeSession.id);
@@ -302,9 +303,9 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                   {/* QR Code Canvas with Countdown */}
                   <div className="relative inline-block p-4 bg-white border border-zinc-200 rounded-2xl shadow-sm">
                     {qrToken ? (
-                      <QRCodeSVG value={qrToken} size={180} level="M" />
+                      <QRCodeSVG value={qrToken} size={280} level="H" marginSize={4} bgColor="#ffffff" fgColor="#020617" />
                     ) : (
-                      <div className="h-44 w-44 bg-slate-200 rounded animate-pulse"></div>
+                      <div className="h-[280px] w-[280px] bg-slate-200 rounded animate-pulse"></div>
                     )}
                     {/* Countdown overlay circle indicator */}
                     <div className="absolute -bottom-3 -right-3 flex items-center justify-center bg-slate-900 border border-slate-850 rounded-full h-11 w-11 shadow-md text-xs font-mono font-bold text-emerald-400 select-none">

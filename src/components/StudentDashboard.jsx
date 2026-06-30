@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { BrowserQRCodeReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import { 
   loadDB, 
   generateBrowserFingerprint, 
   registerStudentDevice, 
-  verifyAndSubmitAttendance 
+  verifyAndSubmitAttendance,
+  QR_WINDOW_MS
 } from "../state/db";
 import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, Megaphone, ShieldAlert, UserCheck } from "lucide-react";
 
@@ -12,6 +14,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const scannerControlsRef = useRef(null);
+  const scannerStatusAtRef = useRef(0);
   const [currentUser, setCurrentUser] = useState(user);
   const [clientFingerprint, setClientFingerprint] = useState("");
   const [clientIp, setClientIp] = useState("");
@@ -20,6 +23,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
   const [scanResult, setScanResult] = useState(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [scannerStatus, setScannerStatus] = useState("Camera idle.");
   const [attendanceHistory, setAttendanceHistory] = useState([]);
 
   // JUNO Interactive Load States
@@ -82,6 +86,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
       success: result.success,
       message: result.message
     });
+    setScannerStatus(result.success ? "Scan verified." : "QR read, but verification was blocked.");
     
     setManualToken("");
     onTriggerRefresh();
@@ -102,13 +107,16 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     }
 
     setIsCameraScanning(false);
+    setScannerStatus("Camera idle.");
   };
 
   const startCameraScanner = async () => {
     setCameraError("");
+    setScannerStatus("Opening camera...");
 
     if (!navigator.mediaDevices?.getUserMedia) {
       setCameraError("Live camera access is not available in this browser. Use the phone camera fallback below.");
+      setScannerStatus("Camera unavailable.");
       return;
     }
 
@@ -120,7 +128,16 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
         throw new Error("Scanner video element is not ready");
       }
 
-      const codeReader = new BrowserQRCodeReader();
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+
+      const codeReader = new BrowserQRCodeReader(hints, {
+        delayBetweenScanAttempts: 100,
+        delayBetweenScanSuccess: 300,
+        tryPlayVideoTimeout: 7000
+      });
+      setScannerStatus("Camera ready. Center the teacher QR inside the box.");
 
       scannerControlsRef.current = await codeReader.decodeFromConstraints(
         {
@@ -132,10 +149,18 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
           }
         },
         videoRef.current,
-        (result, error, controls) => {
-          if (!result) return;
+        (result, _error, controls) => {
+          if (!result) {
+            const now = Date.now();
+            if (now - scannerStatusAtRef.current > 1800) {
+              scannerStatusAtRef.current = now;
+              setScannerStatus("Scanning... move closer and keep the QR flat in the frame.");
+            }
+            return;
+          }
 
           const scannedToken = result.getText().trim();
+          setScannerStatus("QR detected. Verifying attendance...");
           controls.stop();
           scannerControlsRef.current = null;
           setIsCameraScanning(false);
@@ -145,6 +170,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     } catch (err) {
       stopCameraScanner();
       setCameraError("Live camera could not open. Use HTTPS, allow camera permission, or tap the phone camera fallback below.");
+      setScannerStatus("Camera stopped.");
     }
   };
 
@@ -155,15 +181,21 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     if (!file) return;
 
     setCameraError("");
+    setScannerStatus("Reading captured QR image...");
     let imageUrl = "";
 
     try {
-      const codeReader = new BrowserQRCodeReader();
+      const hints = new Map();
+      hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
+      hints.set(DecodeHintType.TRY_HARDER, true);
+      const codeReader = new BrowserQRCodeReader(hints);
       imageUrl = URL.createObjectURL(file);
       const result = await codeReader.decodeFromImageUrl(imageUrl);
+      setScannerStatus("QR image decoded. Verifying attendance...");
       handleScanSubmit(result.getText().trim());
     } catch (err) {
       setCameraError("Could not read a QR code from that camera image. Retake it with the QR centered and in focus.");
+      setScannerStatus("Camera image did not contain a readable QR.");
     } finally {
       if (imageUrl) {
         URL.revokeObjectURL(imageUrl);
@@ -176,7 +208,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     const db = loadDB();
     const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
     const currentTimestamp = Date.now() + timeOffsetMs;
-    const windowTimestamp = Math.floor(currentTimestamp / 5000) * 5000;
+    const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
     
     const payload = {
       sessionId: activeSession.id,
@@ -420,6 +452,9 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                     >
                       Open Phone Camera Fallback
                     </button>
+                    <div className="rounded-lg border border-slate-200 bg-white/40 p-2.5 text-[10px] font-semibold text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
+                      {scannerStatus}
+                    </div>
                     {!activeSession && (
                       <p className="text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
                         No active teacher broadcast is running yet. The camera can open, but attendance will only submit after a teacher starts a QR session.
