@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { BrowserQRCodeReader } from "@zxing/browser";
 import { 
   loadDB, 
   generateBrowserFingerprint, 
@@ -9,8 +10,7 @@ import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, 
 
 export default function StudentDashboard({ user, triggerRefresh, onTriggerRefresh }) {
   const videoRef = useRef(null);
-  const scannerStreamRef = useRef(null);
-  const scannerFrameRef = useRef(null);
+  const scannerControlsRef = useRef(null);
   const [currentUser, setCurrentUser] = useState(user);
   const [clientFingerprint, setClientFingerprint] = useState("");
   const [clientIp, setClientIp] = useState("");
@@ -91,14 +91,9 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
   };
 
   const stopCameraScanner = () => {
-    if (scannerFrameRef.current) {
-      cancelAnimationFrame(scannerFrameRef.current);
-      scannerFrameRef.current = null;
-    }
-
-    if (scannerStreamRef.current) {
-      scannerStreamRef.current.getTracks().forEach(track => track.stop());
-      scannerStreamRef.current = null;
+    if (scannerControlsRef.current) {
+      scannerControlsRef.current.stop();
+      scannerControlsRef.current = null;
     }
 
     if (videoRef.current) {
@@ -117,48 +112,32 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" } },
-        audio: false
-      });
-
-      scannerStreamRef.current = stream;
       setIsCameraScanning(true);
+      const codeReader = new BrowserQRCodeReader();
+      const devices = await BrowserQRCodeReader.listVideoInputDevices();
+      const backCamera = devices.find(device => /back|rear|environment/i.test(device.label));
+      const selectedDeviceId = backCamera?.deviceId || devices[0]?.deviceId;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      if (!selectedDeviceId) {
+        throw new Error("No camera device found");
       }
 
-      if (!("BarcodeDetector" in window)) {
-        setCameraError("Camera is open, but this browser cannot auto-read QR codes. Try Chrome on Android, or paste the token manually below.");
-        return;
-      }
+      scannerControlsRef.current = await codeReader.decodeFromVideoDevice(
+        selectedDeviceId,
+        videoRef.current,
+        (result, error, controls) => {
+          if (!result) return;
 
-      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-
-      const scanFrame = async () => {
-        if (!videoRef.current || !scannerStreamRef.current) return;
-
-        try {
-          const codes = await detector.detect(videoRef.current);
-          if (codes.length > 0 && codes[0].rawValue) {
-            const scannedToken = codes[0].rawValue.trim();
-            stopCameraScanner();
-            handleScanSubmit(scannedToken);
-            return;
-          }
-        } catch (err) {
-          setCameraError("Could not read the camera frame. Keep the QR code centered and try again.");
+          const scannedToken = result.getText().trim();
+          controls.stop();
+          scannerControlsRef.current = null;
+          setIsCameraScanning(false);
+          handleScanSubmit(scannedToken);
         }
-
-        scannerFrameRef.current = requestAnimationFrame(scanFrame);
-      };
-
-      scannerFrameRef.current = requestAnimationFrame(scanFrame);
+      );
     } catch (err) {
       stopCameraScanner();
-      setCameraError("Camera permission was blocked or no rear camera was found. Allow camera access and try again.");
+      setCameraError("Camera could not open. Use HTTPS, allow camera permission, and try Chrome/Edge on Android or Safari on iPhone.");
     }
   };
 

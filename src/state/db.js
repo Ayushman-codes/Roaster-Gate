@@ -112,12 +112,18 @@ export function generateQrPayload(sessionId) {
   const db = loadDB();
   const timeOffset = db.simulation.timeOffsetSeconds * 1000;
   const currentTimestamp = Date.now() + timeOffset;
+  const session = db.sessions.find(s => s.id === sessionId);
+  const subject = session ? db.subjects.find(s => s.id === session.subjectId) : null;
 
   // Round timestamp down to the nearest 5-second interval to stabilize current window
   const windowTimestamp = Math.floor(currentTimestamp / 5000) * 5000;
 
   const payload = {
     sessionId,
+    subjectId: session?.subjectId || "",
+    teacherId: session?.teacherId || "",
+    subjectName: subject?.name || "",
+    subnet: subject?.subnet || "",
     timestamp: windowTimestamp,
     salt: Math.random().toString(36).substring(2, 6)
   };
@@ -197,17 +203,30 @@ export function verifyAndSubmitAttendance(studentId, token) {
     return { success: false, message: "Invalid QR scan token format. (Cheating Flagged)" };
   }
 
-  const session = db.sessions.find(s => s.id === payload.sessionId);
+  let session = db.sessions.find(s => s.id === payload.sessionId);
   if (!session) {
-    writeAuditLog(
-      "WARN",
-      `Scan Failed: Session Not Found for ${student.name}`,
-      `Requested Session ID: ${payload.sessionId}. IP: ${clientIp}.`
-    );
-    return { success: false, message: "Attendance session is no longer active or does not exist." };
+    if (!payload.subjectId) {
+      writeAuditLog(
+        "WARN",
+        `Scan Failed: Session Not Found for ${student.name}`,
+        `Requested Session ID: ${payload.sessionId}. IP: ${clientIp}.`
+      );
+      return { success: false, message: "Attendance session is no longer active or does not exist." };
+    }
+
+    session = {
+      id: payload.sessionId,
+      subjectId: payload.subjectId,
+      teacherId: payload.teacherId || "remote_teacher",
+      startedAt: payload.timestamp
+    };
   }
 
-  const subject = db.subjects.find(s => s.id === session.subjectId);
+  const subject = db.subjects.find(s => s.id === session.subjectId) || {
+    id: payload.subjectId,
+    name: payload.subjectName || payload.subjectId,
+    subnet: payload.subnet || ""
+  };
 
   // 2. Check Device Binding
   if (!student.registeredFingerprint) {
