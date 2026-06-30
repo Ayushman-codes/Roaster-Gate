@@ -115,7 +115,6 @@ export function generateQrPayload(sessionId) {
   const timeOffset = db.simulation.timeOffsetSeconds * 1000;
   const currentTimestamp = Date.now() + timeOffset;
   const session = db.sessions.find(s => s.id === sessionId);
-  const subject = session ? db.subjects.find(s => s.id === session.subjectId) : null;
 
   // Round timestamp down to the current rolling interval to stabilize the QR window
   const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
@@ -123,9 +122,6 @@ export function generateQrPayload(sessionId) {
   const payload = {
     sid: sessionId,
     sub: session?.subjectId || "",
-    tid: session?.teacherId || "",
-    name: subject?.name || "",
-    net: subject?.subnet || "",
     ts: windowTimestamp,
     x: Math.random().toString(36).substring(2, 6)
   };

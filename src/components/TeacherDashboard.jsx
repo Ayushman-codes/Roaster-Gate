@@ -277,7 +277,7 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                   {/* QR Code Canvas with Countdown */}
                   <div className="relative inline-block p-4 bg-white border border-zinc-200 rounded-2xl shadow-sm">
                     {qrToken ? (
-                      <QRCodeSVG value={qrToken} size={280} level="H" marginSize={4} bgColor="#ffffff" fgColor="#020617" />
+                      <QRCodeSVG value={qrToken} size={300} level="M" marginSize={2} bgColor="#ffffff" fgColor="#020617" />
                     ) : (
                       <div className="h-[280px] w-[280px] bg-slate-200 rounded animate-pulse"></div>
                     )}
@@ -453,8 +453,8 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                             </td>
                             <td className="py-2.5">
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${isRegistered
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/20"
-                                  : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/20"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/20"
+                                : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/20"
                                 }`}>
                                 {isRegistered ? "Device Linked" : "No Device"}
                               </span>
@@ -475,8 +475,8 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                                 <button
                                   onClick={() => handleOverride(student.id, "Present")}
                                   className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${record && record.status === "Present"
-                                      ? "bg-[#0e5b9e] text-white shadow-xs"
-                                      : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                    ? "bg-[#0e5b9e] text-white shadow-xs"
+                                    : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
                                     }`}
                                 >
                                   Pres
@@ -484,8 +484,8 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                                 <button
                                   onClick={() => handleOverride(student.id, "Late")}
                                   className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${record && record.status === "Late"
-                                      ? "bg-yellow-500 text-slate-950 shadow-xs"
-                                      : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                    ? "bg-yellow-500 text-slate-950 shadow-xs"
+                                    : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
                                     }`}
                                 >
                                   Late
@@ -493,8 +493,8 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                                 <button
                                   onClick={() => handleOverride(student.id, "Absent")}
                                   className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${!record
-                                      ? "bg-rose-600 text-white shadow-xs"
-                                      : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                    ? "bg-rose-600 text-white shadow-xs"
+                                    : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
                                     }`}
                                 >
                                   Abs

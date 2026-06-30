@@ -121,9 +121,10 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
       const hints = new Map();
       hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.QR_CODE]);
       hints.set(DecodeHintType.TRY_HARDER, true);
+      hints.set(DecodeHintType.ALSO_INVERTED, true);
 
       const codeReader = new BrowserQRCodeReader(hints, {
-        delayBetweenScanAttempts: 100,
+        delayBetweenScanAttempts: 60,
         delayBetweenScanSuccess: 300,
         tryPlayVideoTimeout: 7000
       });
@@ -134,8 +135,9 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
           audio: false,
           video: {
             facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            focusMode: "continuous"
           }
         },
         videoRef.current,
