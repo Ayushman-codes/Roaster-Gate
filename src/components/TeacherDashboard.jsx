@@ -1,31 +1,36 @@
-import React, { useState, useEffect } from "react";
-import { 
-  loadDB, 
-  startTeacherSession, 
-  endTeacherSession, 
-  generateQrPayload, 
+import { useState, useEffect } from "react";
+import {
+  loadDB,
+  startTeacherSession,
+  endTeacherSession,
+  generateQrPayload,
   QR_WINDOW_MS,
-  submitManualOverride 
+  submitManualOverride
 } from "../state/db";
 import { QRCodeSVG } from "qrcode.react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
-import { Play, Square, Users, Award, ShieldAlert, CheckSquare, Eye, Edit3 } from "lucide-react";
+import { Play, Users, Eye } from "lucide-react";
 
-export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefresh }) {
-  const [subjects, setSubjects] = useState([]);
-  const [activeSession, setActiveSession] = useState(null);
+export default function TeacherDashboard({ user, onTriggerRefresh }) {
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
-  
+
   // Live QR States
   const [qrToken, setQrToken] = useState("");
   const [timeLeft, setTimeLeft] = useState(QR_WINDOW_MS / 1000);
-  const [sessionEnrolledStudents, setSessionEnrolledStudents] = useState([]);
-  const [attendanceRecords, setAttendanceRecords] = useState([]);
 
   // JUNO Interactive Load States
   const [isControlsLoaded, setIsControlsLoaded] = useState(true);
   const [isAnalyticsLoaded, setIsAnalyticsLoaded] = useState(false);
   const [isRosterLoaded, setIsRosterLoaded] = useState(true);
+
+  const db = loadDB();
+  const subjects = db.subjects.filter(s => s.teacherId === user.id);
+  const activeSession = db.sessions.find(s => s.teacherId === user.id) || null;
+  const sessionEnrolledStudents = db.users.filter(u => u.role === "student");
+  const attendanceRecords = activeSession
+    ? db.attendance.filter(a => a.sessionId === activeSession.id)
+    : [];
+  const effectiveSelectedSubjectId = selectedSubjectId || subjects[0]?.id || "";
 
   // Mock analytics data
   const chartData = [
@@ -43,31 +48,6 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
   ];
   const COLORS = ["#10b981", "#f5e04f", "#f43f5e"];
 
-  useEffect(() => {
-    const db = loadDB();
-    // Filter subjects taught by this teacher
-    const teachSubjects = db.subjects.filter(s => s.teacherId === user.id);
-    setSubjects(teachSubjects);
-    if (teachSubjects.length > 0 && !selectedSubjectId) {
-      setSelectedSubjectId(teachSubjects[0].id);
-    }
-
-    // Check if there is an active session
-    const currentSession = db.sessions.find(s => s.teacherId === user.id);
-    setActiveSession(currentSession);
-
-    if (currentSession) {
-      // Find all students (in our simple simulation, all students can be enrolled in all subjects)
-      const allStudents = db.users.filter(u => u.role === "student");
-      setSessionEnrolledStudents(allStudents);
-
-      // Find attendance records for this session
-      const records = db.attendance.filter(a => a.sessionId === currentSession.id);
-      setAttendanceRecords(records);
-    }
-
-  }, [user.id, selectedSubjectId, triggerRefresh]);
-
   // Periodic QR Code Refresh Logic
   useEffect(() => {
     if (!activeSession) return;
@@ -84,7 +64,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
       const db = loadDB();
       const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
       const currentTimestamp = Date.now() + timeOffsetMs;
-      
+
       // Calculate milliseconds left in the current rolling interval
       const msLeft = QR_WINDOW_MS - (currentTimestamp % QR_WINDOW_MS);
       const secondsLeft = (msLeft / 1000);
@@ -93,9 +73,6 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
       // If we are close to the transition boundary, update the token
       if (secondsLeft >= (QR_WINDOW_MS / 1000) - 0.1 || secondsLeft <= 0.1) {
         updateQR();
-        // Trigger list reload in case new student scanned
-        const records = db.attendance.filter(a => a.sessionId === activeSession.id);
-        setAttendanceRecords(records);
       }
     }, 100);
 
@@ -103,8 +80,8 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
   }, [activeSession]);
 
   const handleStartSession = () => {
-    if (!selectedSubjectId) return;
-    const res = startTeacherSession(user.id, selectedSubjectId);
+    if (!effectiveSelectedSubjectId) return;
+    const res = startTeacherSession(user.id, effectiveSelectedSubjectId);
     if (res.success) {
       onTriggerRefresh();
     } else {
@@ -116,7 +93,6 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
     if (!activeSession) return;
     const res = endTeacherSession(activeSession.id);
     if (res.success) {
-      setActiveSession(null);
       setQrToken("");
       onTriggerRefresh();
     }
@@ -133,9 +109,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
   // Compute live stats for dashboard cards
   const totalStudents = sessionEnrolledStudents.length;
   const presentCount = attendanceRecords.filter(r => r.status === "Present").length;
-  const lateCount = attendanceRecords.filter(r => r.status === "Late").length;
-  const absentCount = totalStudents - presentCount - lateCount;
-  const activeSubject = subjects.find(s => s.id === (activeSession ? activeSession.subjectId : selectedSubjectId));
+  const activeSubject = subjects.find(s => s.id === (activeSession ? activeSession.subjectId : effectiveSelectedSubjectId));
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left max-w-7xl mx-auto py-2">
@@ -146,7 +120,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
           <h3 className="font-bold text-xs text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
             Instructor Credentials
           </h3>
-          
+
           <div className="space-y-3.5 text-xs">
             <div>
               <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Instructor ID</div>
@@ -196,7 +170,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
           <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mb-4">Open common instructor actions directly.</p>
 
           <div className="space-y-2 text-xs">
-            <button 
+            <button
               onClick={() => {
                 setIsControlsLoaded(true);
                 document.getElementById("controls-card")?.scrollIntoView({ behavior: "smooth" });
@@ -207,7 +181,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
               <span>Broadcast Controls</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsAnalyticsLoaded(true);
                 document.getElementById("analytics-card")?.scrollIntoView({ behavior: "smooth" });
@@ -218,7 +192,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
               <span>Roster Analytics</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsRosterLoaded(true);
                 document.getElementById("roster-card")?.scrollIntoView({ behavior: "smooth" });
@@ -263,7 +237,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                       Select Subject & Class
                     </label>
                     <select
-                      value={selectedSubjectId}
+                      value={effectiveSelectedSubjectId}
                       onChange={(e) => setSelectedSubjectId(e.target.value)}
                       className="w-full bg-slate-50 border border-zinc-300 dark:bg-zinc-950/80 dark:border-zinc-800 rounded-lg p-2.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-[#0e5b9e] dark:focus:border-emerald-500 cursor-pointer"
                     >
@@ -362,8 +336,8 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                     <AreaChart data={chartData} margin={{ top: 10, right: 5, left: -25, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0e5b9e" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="#0e5b9e" stopOpacity={0}/>
+                          <stop offset="5%" stopColor="#0e5b9e" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#0e5b9e" stopOpacity={0} />
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" stroke="#888" fontSize={10} tickLine={false} />
@@ -373,7 +347,7 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-                
+
                 {/* Recharts Pie Chart */}
                 <div className="h-44 flex flex-col justify-center items-center">
                   <span className="text-[10px] text-zinc-450 uppercase font-semibold block mb-2">Today's Ratio</span>
@@ -478,11 +452,10 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                               <div className="text-[9px] text-zinc-450 font-mono">{student.id}</div>
                             </td>
                             <td className="py-2.5">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${
-                                isRegistered 
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/20" 
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold ${isRegistered
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/20"
                                   : "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/20 dark:text-rose-400 dark:border-rose-900/20"
-                              }`}>
+                                }`}>
                                 {isRegistered ? "Device Linked" : "No Device"}
                               </span>
                             </td>
@@ -501,31 +474,28 @@ export default function TeacherDashboard({ user, triggerRefresh, onTriggerRefres
                               <div className="inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-0.5 gap-0.5">
                                 <button
                                   onClick={() => handleOverride(student.id, "Present")}
-                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${
-                                    record && record.status === "Present"
+                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${record && record.status === "Present"
                                       ? "bg-[#0e5b9e] text-white shadow-xs"
                                       : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
-                                  }`}
+                                    }`}
                                 >
                                   Pres
                                 </button>
                                 <button
                                   onClick={() => handleOverride(student.id, "Late")}
-                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${
-                                    record && record.status === "Late"
+                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${record && record.status === "Late"
                                       ? "bg-yellow-500 text-slate-950 shadow-xs"
                                       : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
-                                  }`}
+                                    }`}
                                 >
                                   Late
                                 </button>
                                 <button
                                   onClick={() => handleOverride(student.id, "Absent")}
-                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${
-                                    !record
+                                  className={`px-2 py-1 rounded text-[9px] font-bold cursor-pointer transition ${!record
                                       ? "bg-rose-600 text-white shadow-xs"
                                       : "text-zinc-500 hover:text-slate-800 dark:hover:text-slate-200"
-                                  }`}
+                                    }`}
                                 >
                                   Abs
                                 </button>

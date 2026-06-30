@@ -1,70 +1,54 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType } from "@zxing/library";
-import { 
-  loadDB, 
-  generateBrowserFingerprint, 
-  registerStudentDevice, 
-  verifyAndSubmitAttendance,
-  QR_WINDOW_MS
+import {
+  loadDB,
+  generateBrowserFingerprint,
+  registerStudentDevice,
+  verifyAndSubmitAttendance
 } from "../state/db";
-import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, Megaphone, ShieldAlert, UserCheck } from "lucide-react";
+import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, UserCheck } from "lucide-react";
 
-export default function StudentDashboard({ user, triggerRefresh, onTriggerRefresh }) {
+export default function StudentDashboard({ user, onTriggerRefresh }) {
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const scannerStatusAtRef = useRef(0);
-  const [currentUser, setCurrentUser] = useState(user);
-  const [clientFingerprint, setClientFingerprint] = useState("");
-  const [clientIp, setClientIp] = useState("");
   const [manualToken, setManualToken] = useState("");
-  const [activeSession, setActiveSession] = useState(null);
   const [scanResult, setScanResult] = useState(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [scannerStatus, setScannerStatus] = useState("Camera idle.");
-  const [attendanceHistory, setAttendanceHistory] = useState([]);
 
   // JUNO Interactive Load States
   const [isScannerLoaded, setIsScannerLoaded] = useState(false);
   const [isDeviceLoaded, setIsDeviceLoaded] = useState(false);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
 
-  useEffect(() => {
-    const db = loadDB();
-    const freshUser = db.users.find(u => u.id === user.id);
-    if (freshUser) {
-      setCurrentUser(freshUser);
-    }
-    
-    setClientFingerprint(db.simulation.fingerprintOverride || generateBrowserFingerprint());
-    setClientIp(db.simulation.clientIp);
-
-    if (db.sessions.length > 0) {
-      const activeSess = db.sessions[0];
-      const subject = db.subjects.find(s => s.id === activeSess.subjectId);
-      setActiveSession({
-        ...activeSess,
+  const db = loadDB();
+  const currentUser = db.users.find(u => u.id === user.id) ?? user;
+  const clientFingerprint = db.simulation.fingerprintOverride || generateBrowserFingerprint();
+  const activeSessionBase = db.sessions.length > 0
+    ? [...db.sessions].sort((a, b) => {
+      const aTime = a.createdAt ?? a.startedAt ?? 0;
+      const bTime = b.createdAt ?? b.startedAt ?? 0;
+      return bTime - aTime;
+    })[0]
+    : null;
+  const activeSession = activeSessionBase
+    ? (() => {
+      const subject = db.subjects.find(s => s.id === activeSessionBase.subjectId);
+      return {
+        ...activeSessionBase,
         subjectName: subject ? subject.name : "Unknown",
         subjectCode: subject ? subject.id : "",
         subnet: subject ? subject.subnet : ""
-      });
-    } else {
-      setActiveSession(null);
-    }
-
-    const history = db.attendance.filter(a => a.studentId === user.id);
-    history.sort((a, b) => b.timestamp - a.timestamp);
-    setAttendanceHistory(history);
-
-  }, [user.id, triggerRefresh]);
-
-  useEffect(() => {
-    return () => {
-      stopCameraScanner();
-    };
-  }, []);
+      };
+    })()
+    : null;
+  const attendanceHistory = db.attendance
+    .filter(a => a.studentId === user.id)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   const handleRegisterDevice = () => {
     const res = registerStudentDevice(currentUser.id, clientFingerprint);
@@ -80,14 +64,14 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
       alert("No token payload found to scan.");
       return;
     }
-    
+
     const result = verifyAndSubmitAttendance(currentUser.id, tokenToScan);
     setScanResult({
       success: result.success,
       message: result.message
     });
     setScannerStatus(result.success ? "Scan verified." : "QR read, but verification was blocked.");
-    
+
     setManualToken("");
     onTriggerRefresh();
 
@@ -96,7 +80,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     }, 6000);
   };
 
-  const stopCameraScanner = () => {
+  function stopCameraScanner() {
     if (scannerControlsRef.current) {
       scannerControlsRef.current.stop();
       scannerControlsRef.current = null;
@@ -108,7 +92,13 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
 
     setIsCameraScanning(false);
     setScannerStatus("Camera idle.");
-  };
+  }
+
+  useEffect(() => {
+    return () => {
+      stopCameraScanner();
+    };
+  }, []);
 
   const startCameraScanner = async () => {
     setCameraError("");
@@ -167,7 +157,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
           handleScanSubmit(scannedToken);
         }
       );
-    } catch (err) {
+    } catch {
       stopCameraScanner();
       setCameraError("Live camera could not open. Use HTTPS, allow camera permission, or tap the phone camera fallback below.");
       setScannerStatus("Camera stopped.");
@@ -193,7 +183,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
       const result = await codeReader.decodeFromImageUrl(imageUrl);
       setScannerStatus("QR image decoded. Verifying attendance...");
       handleScanSubmit(result.getText().trim());
-    } catch (err) {
+    } catch {
       setCameraError("Could not read a QR code from that camera image. Retake it with the QR centered and in focus.");
       setScannerStatus("Camera image did not contain a readable QR.");
     } finally {
@@ -201,23 +191,6 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
         URL.revokeObjectURL(imageUrl);
       }
     }
-  };
-
-  const handleQuickScan = () => {
-    if (!activeSession) return;
-    const db = loadDB();
-    const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
-    const currentTimestamp = Date.now() + timeOffsetMs;
-    const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
-    
-    const payload = {
-      sessionId: activeSession.id,
-      timestamp: windowTimestamp,
-      salt: Math.random().toString(36).substring(2, 6)
-    };
-
-    const token = btoa(JSON.stringify(payload));
-    handleScanSubmit(token);
   };
 
   const isDeviceBound = !!currentUser.registeredFingerprint;
@@ -232,7 +205,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
           <h3 className="font-bold text-xs text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
             Student Credentials
           </h3>
-          
+
           <div className="space-y-3.5 text-xs">
             <div>
               <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Enrollment No</div>
@@ -273,7 +246,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
             </div>
 
             <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800">
-              <button 
+              <button
                 onClick={() => {
                   setIsDeviceLoaded(true);
                   // Scroll to device card
@@ -295,7 +268,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
           <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mb-4">Open common student actions directly.</p>
 
           <div className="space-y-2 text-xs">
-            <button 
+            <button
               onClick={() => {
                 setIsDeviceLoaded(true);
                 document.getElementById("device-card")?.scrollIntoView({ behavior: "smooth" });
@@ -306,7 +279,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
               <span>Verify Profile Fingerprint</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsScannerLoaded(true);
                 document.getElementById("scanner-card")?.scrollIntoView({ behavior: "smooth" });
@@ -317,7 +290,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
               <span>Attendance QR Scan Portal</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsHistoryLoaded(true);
                 document.getElementById("history-card")?.scrollIntoView({ behavior: "smooth" });
@@ -356,11 +329,10 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
           {isScannerLoaded ? (
             <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-800 space-y-4 animate-fade-in">
               {scanResult && (
-                <div className={`p-4 rounded-xl text-xs flex gap-3 ${
-                  scanResult.success 
-                    ? "bg-emerald-50 dark:glass-emerald text-emerald-800 dark:text-emerald-200 border border-emerald-250" 
-                    : "bg-rose-50 dark:glass-rose text-rose-800 dark:text-rose-200 border border-rose-250"
-                }`}>
+                <div className={`p-4 rounded-xl text-xs flex gap-3 ${scanResult.success
+                  ? "bg-emerald-50 dark:glass-emerald text-emerald-800 dark:text-emerald-200 border border-emerald-250"
+                  : "bg-rose-50 dark:glass-rose text-rose-800 dark:text-rose-200 border border-rose-250"
+                  }`}>
                   {scanResult.success ? (
                     <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
                   ) : (
@@ -548,11 +520,10 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
 
                     <div>
                       <div className="text-[10px] text-zinc-500">Detected Fingerprint Hash:</div>
-                      <div className={`font-mono p-2 rounded border select-all mt-1 ${
-                        isFingerprintMatch 
-                          ? "bg-slate-50 dark:bg-zinc-950 border-emerald-300 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-400" 
-                          : "bg-rose-50 dark:bg-zinc-950 border-rose-350 dark:border-rose-900/30 text-rose-700 dark:text-rose-450"
-                      }`}>
+                      <div className={`font-mono p-2 rounded border select-all mt-1 ${isFingerprintMatch
+                        ? "bg-slate-50 dark:bg-zinc-950 border-emerald-300 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-400"
+                        : "bg-rose-50 dark:bg-zinc-950 border-rose-350 dark:border-rose-900/30 text-rose-700 dark:text-rose-450"
+                        }`}>
                         {clientFingerprint}
                       </div>
                     </div>

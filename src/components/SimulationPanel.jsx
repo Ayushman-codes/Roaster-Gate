@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { loadDB, saveDB, generateBrowserFingerprint, QR_WINDOW_MS } from "../state/db";
 import { Terminal, Shield, Cpu, RefreshCw, X, Radio } from "lucide-react";
 
@@ -8,19 +8,21 @@ export default function SimulationPanel({ onUpdate }) {
   const [timeOffset, setTimeOffset] = useState(0);
   const [spoofFingerprint, setSpoofFingerprint] = useState(false);
   const [customFingerprint, setCustomFingerprint] = useState("DEV_FP_SPOOFED_999X");
-  const [realFingerprint, setRealFingerprint] = useState("");
+  const [realFingerprint] = useState(() => generateBrowserFingerprint());
   const [activeSessionToken, setActiveSessionToken] = useState("");
 
   useEffect(() => {
-    setRealFingerprint(generateBrowserFingerprint());
-    
     // Poll the active session token for diagnostic display
     const interval = setInterval(() => {
       const db = loadDB();
       if (db.sessions.length > 0) {
         // If there's an active session, simulate the token being copied or fetched
         // We'll search for the active session and see if a token exists in cache
-        const activeSess = db.sessions[0];
+        const activeSess = [...db.sessions].sort((a, b) => {
+          const aTime = a.createdAt ?? a.startedAt ?? 0;
+          const bTime = b.createdAt ?? b.startedAt ?? 0;
+          return bTime - aTime;
+        })[0];
         // Generate a token for diagnostic preview
         const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
         const currentTimestamp = Date.now() + timeOffsetMs;
@@ -84,9 +86,8 @@ export default function SimulationPanel({ onUpdate }) {
 
       {/* Sidebar Panel */}
       <div
-        className={`fixed top-0 right-0 h-full w-80 z-40 bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 shadow-2xl transition-transform duration-300 ease-in-out transform ${
-          isOpen ? "translate-x-0" : "translate-x-full"
-        } flex flex-col`}
+        className={`fixed top-0 right-0 h-full w-80 z-40 bg-slate-900/95 backdrop-blur-xl border-l border-slate-800 shadow-2xl transition-transform duration-300 ease-in-out transform ${isOpen ? "translate-x-0" : "translate-x-full"
+          } flex flex-col`}
       >
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/60">
@@ -116,11 +117,10 @@ export default function SimulationPanel({ onUpdate }) {
             <div className="space-y-1.5">
               <button
                 onClick={() => handleIpChange("192.168.1.45")}
-                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${
-                  clientIp === "192.168.1.45"
+                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${clientIp === "192.168.1.45"
                     ? "bg-emerald-950/50 border-emerald-500 text-emerald-200"
                     : "bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
+                  }`}
               >
                 <div className="font-medium">Classroom Wi-Fi (Subnet A)</div>
                 <div className="text-[10px] opacity-75">IP: 192.168.1.45 (Expected for CS-101/103)</div>
@@ -128,11 +128,10 @@ export default function SimulationPanel({ onUpdate }) {
 
               <button
                 onClick={() => handleIpChange("10.0.0.8")}
-                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${
-                  clientIp === "10.0.0.8"
+                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${clientIp === "10.0.0.8"
                     ? "bg-emerald-950/50 border-emerald-500 text-emerald-200"
                     : "bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
+                  }`}
               >
                 <div className="font-medium">Classroom Wi-Fi (Subnet B)</div>
                 <div className="text-[10px] opacity-75">IP: 10.0.0.8 (Expected for CS-102)</div>
@@ -140,11 +139,10 @@ export default function SimulationPanel({ onUpdate }) {
 
               <button
                 onClick={() => handleIpChange("73.12.84.10")}
-                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${
-                  clientIp === "73.12.84.10"
+                className={`w-full text-left px-3 py-2 rounded-lg border text-xs cursor-pointer transition-all duration-200 ${clientIp === "73.12.84.10"
                     ? "bg-emerald-950/50 border-emerald-500 text-emerald-200"
                     : "bg-slate-950/40 border-slate-800 text-slate-400 hover:border-slate-700"
-                }`}
+                  }`}
               >
                 <div className="font-medium">Home Network (External)</div>
                 <div className="text-[10px] opacity-75">IP: 73.12.84.10 (Triggers subnet failure)</div>
@@ -173,9 +171,8 @@ export default function SimulationPanel({ onUpdate }) {
             <div className="space-y-2">
               <div className="flex justify-between items-center text-xs">
                 <span className="text-slate-400">Simulated Offset:</span>
-                <span className={`font-mono px-2 py-0.5 rounded ${
-                  timeOffset === 0 ? "text-emerald-400 bg-emerald-950/30" : "text-rose-400 bg-rose-950/30"
-                }`}>
+                <span className={`font-mono px-2 py-0.5 rounded ${timeOffset === 0 ? "text-emerald-400 bg-emerald-950/30" : "text-rose-400 bg-rose-950/30"
+                  }`}>
                   {timeOffset === 0 ? "Perfect Sync (0s)" : `${timeOffset > 0 ? "+" : ""}${timeOffset} seconds`}
                 </span>
               </div>

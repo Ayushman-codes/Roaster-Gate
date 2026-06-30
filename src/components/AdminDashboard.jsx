@@ -1,17 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { 
-  loadDB, 
-  saveDB, 
-  unbindStudentDevice, 
-  writeAuditLog 
+import { useState } from "react";
+import {
+  loadDB,
+  saveDB,
+  unbindStudentDevice,
+  writeAuditLog
 } from "../state/db";
-import { Users, Server, ShieldAlert, Trash2, Search, PlusCircle, Unlock, Info, ShieldX } from "lucide-react";
+import { Users, Server, ShieldAlert, Trash2, Search, PlusCircle, Unlock } from "lucide-react";
 
-export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
-  const [users, setUsers] = useState([]);
-  const [subjects, setSubjects] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]);
-  
+export default function AdminDashboard({ onTriggerRefresh }) {
   // JUNO Interactive Load States
   const [isLogsLoaded, setIsLogsLoaded] = useState(true);
   const [isUsersLoaded, setIsUsersLoaded] = useState(false);
@@ -33,12 +29,10 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
   const [newSubRoom, setNewSubRoom] = useState("");
   const [newSubSubnet, setNewSubSubnet] = useState("192.168.1.*");
 
-  useEffect(() => {
-    const db = loadDB();
-    setUsers(db.users);
-    setSubjects(db.subjects);
-    setAuditLogs(db.auditLogs);
-  }, [triggerRefresh]);
+  const db = loadDB();
+  const users = db.users;
+  const subjects = db.subjects;
+  const auditLogs = db.auditLogs;
 
   const handleClearDevice = (studentId) => {
     const res = unbindStudentDevice(studentId);
@@ -53,7 +47,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
 
     const db = loadDB();
     const newId = (newUserRole === "student" ? "stu_" : "teach_") + Math.random().toString(36).substr(2, 6);
-    
+
     const newUser = {
       id: newId,
       name: newUserName,
@@ -66,7 +60,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
     saveDB(db);
 
     writeAuditLog("INFO", "User Created by Admin", `Added ${newUserRole} '${newUserName}' with ID ${newId}`);
-    
+
     // Clear forms
     setNewUserName("");
     setNewUserEmail("");
@@ -109,12 +103,12 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
 
   // Filter logs based on search and level dropdown
   const filteredLogs = auditLogs.filter(log => {
-    const matchesSearch = 
-      log.message.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const matchesSearch =
+      log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.details && log.details.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const matchesLevel = levelFilter === "ALL" || log.level === levelFilter;
-    
+
     return matchesSearch && matchesLevel;
   });
 
@@ -131,7 +125,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
           <h3 className="font-bold text-xs text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-4 pb-2 border-b border-zinc-100 dark:border-zinc-800">
             System Admin Credentials
           </h3>
-          
+
           <div className="space-y-3.5 text-xs">
             <div>
               <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Operator Role</div>
@@ -163,7 +157,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
           <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mb-4">Jump directly to administration sections.</p>
 
           <div className="space-y-2 text-xs">
-            <button 
+            <button
               onClick={() => {
                 setIsLogsLoaded(true);
                 document.getElementById("logs-card")?.scrollIntoView({ behavior: "smooth" });
@@ -174,7 +168,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
               <span>Security Audit Logs</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsUsersLoaded(true);
                 document.getElementById("users-card")?.scrollIntoView({ behavior: "smooth" });
@@ -185,7 +179,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
               <span>User Directory</span>
             </button>
 
-            <button 
+            <button
               onClick={() => {
                 setIsSubjectsLoaded(true);
                 document.getElementById("subjects-card")?.scrollIntoView({ behavior: "smooth" });
@@ -264,7 +258,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
                   <span className="font-mono text-[10px] text-zinc-500 font-bold uppercase">Security Audit Stream Console</span>
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">{filteredLogs.length} Entries found</span>
                 </div>
-                
+
                 <div className="p-2 bg-white dark:bg-zinc-950/40 font-mono text-xs max-h-[350px] overflow-y-auto space-y-1.5 divide-y divide-zinc-100 dark:divide-zinc-900">
                   {filteredLogs.length === 0 ? (
                     <div className="text-center py-12 text-zinc-450 font-sans">
@@ -274,7 +268,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
                     filteredLogs.map(log => {
                       let levelClass = "text-zinc-500";
                       let levelBg = "bg-slate-50 dark:bg-zinc-950/40 border border-zinc-100 dark:border-zinc-900";
-                      
+
                       if (log.level === "WARN") {
                         levelClass = "text-amber-700 dark:text-amber-400";
                         levelBg = "bg-amber-50/50 border border-amber-200 dark:bg-amber-950/10 dark:border-amber-900/20";
@@ -453,7 +447,7 @@ export default function AdminDashboard({ triggerRefresh, onTriggerRefresh }) {
                   <h4 className="font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center gap-1.5 pb-2 border-b border-zinc-200 dark:border-zinc-800">
                     <PlusCircle className="h-4 w-4 text-[#0e5b9e] dark:text-[#10b981]" /> Add Roster Account
                   </h4>
-                  
+
                   <form onSubmit={handleAddUser} className="space-y-3.5 text-xs">
                     <div className="space-y-1">
                       <label className="block text-zinc-500 font-bold">Full Name</label>

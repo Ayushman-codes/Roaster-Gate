@@ -77,10 +77,10 @@ export function generateBrowserFingerprint() {
   const screenHeight = window.screen.height;
   const language = navigator.language;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  
+
   // Create a clean hash-like representation from screen + browser settings
   const rawFingerprint = `${userAgent}-${screenWidth}x${screenHeight}-${language}-${timezone}`;
-  
+
   // Simple hash function to create a readable hex string
   let hash = 0;
   for (let i = 0; i < rawFingerprint.length; i++) {
@@ -151,8 +151,8 @@ export function registerStudentDevice(studentId, fingerprint) {
   saveDB(db);
 
   writeAuditLog(
-    "INFO", 
-    `Device Binding Successful: ${db.users[userIndex].name}`, 
+    "INFO",
+    `Device Binding Successful: ${db.users[userIndex].name}`,
     `Fingerprint ${fingerprint} bound to student ID: ${studentId}`
   );
   return { success: true, message: "Device bound successfully." };
@@ -169,8 +169,8 @@ export function unbindStudentDevice(studentId) {
   saveDB(db);
 
   writeAuditLog(
-    "WARN", 
-    `Device Unbound by Admin: ${db.users[userIndex].name}`, 
+    "WARN",
+    `Device Unbound by Admin: ${db.users[userIndex].name}`,
     `Cleared fingerprint ${prevFp || "None"} from student ID: ${studentId}`
   );
   return { success: true, message: "Device unbound successfully." };
@@ -196,7 +196,7 @@ export function verifyAndSubmitAttendance(studentId, token) {
   try {
     const decodedStr = atob(token);
     payload = JSON.parse(decodedStr);
-  } catch (err) {
+  } catch {
     writeAuditLog(
       "CRITICAL",
       `Cheating Flagged: Invalid QR Payload from ${student.name}`,

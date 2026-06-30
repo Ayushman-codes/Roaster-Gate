@@ -1,24 +1,17 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { loadDB, generateBrowserFingerprint } from "../state/db";
 import { UserCheck, ShieldAlert, BookOpen, Key, Users, User, ArrowRight } from "lucide-react";
 
-export default function Login({ onLogin, triggerRefresh }) {
-  const [users, setUsers] = useState([]);
+export default function Login({ onLogin }) {
   const [selectedRole, setSelectedRole] = useState(null); // 'student', 'teacher', 'admin'
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [clientFingerprint, setClientFingerprint] = useState("");
-  const [clientIp, setClientIp] = useState("");
-
-  useEffect(() => {
-    const db = loadDB();
-    setUsers(db.users);
-    setClientFingerprint(db.simulation.fingerprintOverride || generateBrowserFingerprint());
-    setClientIp(db.simulation.clientIp);
-  }, [triggerRefresh]);
+  const db = loadDB();
+  const users = db.users;
+  const clientFingerprint = db.simulation.fingerprintOverride || generateBrowserFingerprint();
+  const clientIp = db.simulation.clientIp;
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
-    const db = loadDB();
     const roleUsers = db.users.filter(u => u.role === role);
     if (roleUsers.length > 0) {
       setSelectedUserId(roleUsers[0].id);
@@ -171,13 +164,12 @@ export default function Login({ onLogin, triggerRefresh }) {
               const fingerprintMatches = currentStu.registeredFingerprint === clientFingerprint;
 
               return (
-                <div className={`p-4 rounded-xl text-xs space-y-2 ${
-                  isBound 
-                    ? fingerprintMatches 
-                      ? "glass-emerald text-emerald-800 dark:text-emerald-200" 
-                      : "glass-rose text-rose-800 dark:text-rose-200" 
-                    : "glass-panel text-slate-750 dark:text-slate-300"
-                }`}>
+                <div className={`p-4 rounded-xl text-xs space-y-2 ${isBound
+                  ? fingerprintMatches
+                    ? "glass-emerald text-emerald-800 dark:text-emerald-200"
+                    : "glass-rose text-rose-800 dark:text-rose-200"
+                  : "glass-panel text-slate-750 dark:text-slate-300"
+                  }`}>
                   <div className="font-semibold flex items-center gap-1.5">
                     {isBound ? (
                       fingerprintMatches ? (

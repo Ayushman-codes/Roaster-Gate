@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { loadDB, writeAuditLog, resetSystemData } from "./state/db";
 import Login from "./components/Login";
 import StudentDashboard from "./components/StudentDashboard";
@@ -15,7 +15,7 @@ export default function App() {
   // Sync session check and state initialization
   useEffect(() => {
     loadDB();
-    
+
     // Apply theme class
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
@@ -69,7 +69,7 @@ export default function App() {
                   JUNO
                 </span>
               </div>
-              
+
               {/* Secondary Red Crest Logo */}
               <div className="h-8 w-8 rounded-full bg-rose-600 flex items-center justify-center border border-white/20 shadow-sm shrink-0">
                 <Shield className="h-4.5 w-4.5 text-white" />
@@ -123,7 +123,7 @@ export default function App() {
                   <div className="text-xs font-bold text-white leading-tight">{currentUser.name}</div>
                   <div className="text-[9px] text-white/70 capitalize font-medium">{currentUser.role}</div>
                 </div>
-                
+
                 {/* Profile Circle Avatar */}
                 <div className="h-8 w-8 rounded-full bg-white/20 border border-white/30 flex items-center justify-center overflow-hidden">
                   <div className="text-xs font-bold text-white capitalize select-none">
@@ -132,7 +132,7 @@ export default function App() {
                 </div>
 
                 {/* Settings Cog */}
-                <button 
+                <button
                   onClick={handleLogout}
                   className="p-1.5 text-white/80 hover:text-rose-350 hover:bg-white/10 rounded cursor-pointer transition"
                   title="Log Out"
@@ -186,23 +186,23 @@ export default function App() {
         {currentUser ? (
           <>
             {currentUser.role === "student" && (
-              <StudentDashboard 
-                user={currentUser} 
-                triggerRefresh={triggerRefresh} 
-                onTriggerRefresh={handleSimulationUpdate} 
+              <StudentDashboard
+                user={currentUser}
+                triggerRefresh={triggerRefresh}
+                onTriggerRefresh={handleSimulationUpdate}
               />
             )}
             {currentUser.role === "teacher" && (
-              <TeacherDashboard 
-                user={currentUser} 
-                triggerRefresh={triggerRefresh} 
-                onTriggerRefresh={handleSimulationUpdate} 
+              <TeacherDashboard
+                user={currentUser}
+                triggerRefresh={triggerRefresh}
+                onTriggerRefresh={handleSimulationUpdate}
               />
             )}
             {currentUser.role === "admin" && (
-              <AdminDashboard 
-                triggerRefresh={triggerRefresh} 
-                onTriggerRefresh={handleSimulationUpdate} 
+              <AdminDashboard
+                triggerRefresh={triggerRefresh}
+                onTriggerRefresh={handleSimulationUpdate}
               />
             )}
           </>
