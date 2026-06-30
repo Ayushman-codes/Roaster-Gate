@@ -116,13 +116,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
       return;
     }
 
-    if (!("BarcodeDetector" in window)) {
-      setCameraError("This browser cannot read QR codes from camera video. Try Chrome on Android, or paste the token manually below.");
-      return;
-    }
-
     try {
-      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" } },
         audio: false
@@ -135,6 +129,13 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
+
+      if (!("BarcodeDetector" in window)) {
+        setCameraError("Camera is open, but this browser cannot auto-read QR codes. Try Chrome on Android, or paste the token manually below.");
+        return;
+      }
+
+      const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
 
       const scanFrame = async () => {
         if (!videoRef.current || !scannerStreamRef.current) return;
@@ -352,12 +353,7 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                       </div>
                       <button
                         onClick={isCameraScanning ? stopCameraScanner : startCameraScanner}
-                        disabled={!isDeviceBound || !isFingerprintMatch}
-                        className={`px-4 py-2 text-xs font-semibold rounded-lg shadow transition cursor-pointer ${
-                          (isDeviceBound && isFingerprintMatch)
-                            ? "bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse"
-                            : "bg-slate-800 text-slate-500 border border-slate-850 cursor-not-allowed"
-                        }`}
+                        className="px-4 py-2 text-xs font-semibold rounded-lg shadow transition cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white animate-pulse"
                       >
                         {isCameraScanning ? "Stop Camera" : "Open Camera Scanner"}
                       </button>
@@ -395,6 +391,17 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                         </>
                       )}
                     </div>
+                    <button
+                      onClick={isCameraScanning ? stopCameraScanner : startCameraScanner}
+                      className="juno-btn-primary w-full"
+                    >
+                      {isCameraScanning ? "Stop Camera" : "Open Camera Scanner"}
+                    </button>
+                    {!activeSession && (
+                      <p className="text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+                        No active teacher broadcast is running yet. The camera can open, but attendance will only submit after a teacher starts a QR session.
+                      </p>
+                    )}
                     {cameraError && (
                       <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-300">
                         {cameraError}
