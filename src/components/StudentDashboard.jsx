@@ -10,6 +10,7 @@ import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, 
 
 export default function StudentDashboard({ user, triggerRefresh, onTriggerRefresh }) {
   const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const [currentUser, setCurrentUser] = useState(user);
   const [clientFingerprint, setClientFingerprint] = useState("");
@@ -107,23 +108,29 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
     setCameraError("");
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Camera access is not available in this browser. Open the deployed site in Chrome or Safari over HTTPS.");
+      setCameraError("Live camera access is not available in this browser. Use the phone camera fallback below.");
       return;
     }
 
     try {
       setIsCameraScanning(true);
-      const codeReader = new BrowserQRCodeReader();
-      const devices = await BrowserQRCodeReader.listVideoInputDevices();
-      const backCamera = devices.find(device => /back|rear|environment/i.test(device.label));
-      const selectedDeviceId = backCamera?.deviceId || devices[0]?.deviceId;
+      await new Promise(resolve => requestAnimationFrame(resolve));
 
-      if (!selectedDeviceId) {
-        throw new Error("No camera device found");
+      if (!videoRef.current) {
+        throw new Error("Scanner video element is not ready");
       }
 
-      scannerControlsRef.current = await codeReader.decodeFromVideoDevice(
-        selectedDeviceId,
+      const codeReader = new BrowserQRCodeReader();
+
+      scannerControlsRef.current = await codeReader.decodeFromConstraints(
+        {
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
         videoRef.current,
         (result, error, controls) => {
           if (!result) return;
@@ -137,7 +144,30 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
       );
     } catch (err) {
       stopCameraScanner();
-      setCameraError("Camera could not open. Use HTTPS, allow camera permission, and try Chrome/Edge on Android or Safari on iPhone.");
+      setCameraError("Live camera could not open. Use HTTPS, allow camera permission, or tap the phone camera fallback below.");
+    }
+  };
+
+  const handleImageQrUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    setCameraError("");
+    let imageUrl = "";
+
+    try {
+      const codeReader = new BrowserQRCodeReader();
+      imageUrl = URL.createObjectURL(file);
+      const result = await codeReader.decodeFromImageUrl(imageUrl);
+      handleScanSubmit(result.getText().trim());
+    } catch (err) {
+      setCameraError("Could not read a QR code from that camera image. Retake it with the QR centered and in focus.");
+    } finally {
+      if (imageUrl) {
+        URL.revokeObjectURL(imageUrl);
+      }
     }
   };
 
@@ -375,6 +405,20 @@ export default function StudentDashboard({ user, triggerRefresh, onTriggerRefres
                       className="juno-btn-primary w-full"
                     >
                       {isCameraScanning ? "Stop Camera" : "Open Camera Scanner"}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageQrUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="juno-btn-secondary w-full"
+                    >
+                      Open Phone Camera Fallback
                     </button>
                     {!activeSession && (
                       <p className="text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
