@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   loadDB,
   startTeacherSession,
@@ -13,6 +13,8 @@ import { Play, Users, Eye } from "lucide-react";
 
 export default function TeacherDashboard({ user, onTriggerRefresh }) {
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
+
+  const lastTimestampRef = useRef(0);
 
   // Live QR States
   const [qrToken, setQrToken] = useState("");
@@ -52,13 +54,11 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
   useEffect(() => {
     if (!activeSession) return;
 
-    let lastTimestamp = 0;
-
     // Helper function to update the token
     const updateQR = (timestamp) => {
       const payloadInfo = generateQrPayload(activeSession.id);
       setQrToken(payloadInfo.token);
-      lastTimestamp = timestamp;
+      lastTimestampRef.current = timestamp;
     };
 
     const interval = setInterval(() => {
@@ -75,7 +75,7 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
       const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
 
       // Only regenerate when we cross into a new window timestamp
-      if (windowTimestamp !== lastTimestamp) {
+      if (windowTimestamp !== lastTimestampRef.current) {
         updateQR(windowTimestamp);
       }
     }, 100);
