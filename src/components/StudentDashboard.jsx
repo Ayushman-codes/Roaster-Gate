@@ -136,8 +136,7 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
           video: {
             facingMode: { ideal: "environment" },
             width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            focusMode: "continuous"
+            height: { ideal: 1080 }
           }
         },
         videoRef.current,
