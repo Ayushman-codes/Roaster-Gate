@@ -52,13 +52,14 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
   useEffect(() => {
     if (!activeSession) return;
 
+    let lastTimestamp = 0;
+
     // Helper function to update the token
-    const updateQR = () => {
+    const updateQR = (timestamp) => {
       const payloadInfo = generateQrPayload(activeSession.id);
       setQrToken(payloadInfo.token);
+      lastTimestamp = timestamp;
     };
-
-    updateQR(); // Initial run
 
     const interval = setInterval(() => {
       const db = loadDB();
@@ -70,14 +71,17 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
       const secondsLeft = (msLeft / 1000);
       setTimeLeft(secondsLeft);
 
-      // If we are close to the transition boundary, update the token
-      if (secondsLeft >= (QR_WINDOW_MS / 1000) - 0.1 || secondsLeft <= 0.1) {
-        updateQR();
+      // Round down current timestamp to find the stable window boundary
+      const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
+
+      // Only regenerate when we cross into a new window timestamp
+      if (windowTimestamp !== lastTimestamp) {
+        updateQR(windowTimestamp);
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [activeSession]);
+  }, [activeSession?.id]);
 
   const handleStartSession = () => {
     if (!effectiveSelectedSubjectId) return;
