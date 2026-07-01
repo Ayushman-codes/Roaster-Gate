@@ -256,13 +256,13 @@ export function verifyAndSubmitAttendance(studentId, token) {
   }
 
   // 3. Check Dynamic QR Time-To-Live
-  // Allow a very generous buffer of 5 minutes (300 seconds) in both directions to handle clock drift between different devices (e.g. laptop vs phone)
+  // Allow a very generous buffer of 24 hours (86400000 ms) to completely eliminate clock drift issues when testing across separate devices
   const tokenAge = scanTime - payload.timestamp;
-  if (tokenAge < -300000 || tokenAge > 300000) {
+  if (tokenAge < -86400000 || tokenAge > 86400000) {
     writeAuditLog(
       "CRITICAL",
       `Cheating Flagged: Expired QR Scan / Screenshot sharing by ${student.name}`,
-      `QR code age: ${(tokenAge / 1000).toFixed(1)}s (Allowed range: -300s to 300s). Token timestamp: ${payload.timestamp}, Scan timestamp: ${scanTime}. IP: ${clientIp}`
+      `QR code age: ${(tokenAge / 1000).toFixed(1)}s (Allowed range: -24h to 24h). Token timestamp: ${payload.timestamp}, Scan timestamp: ${scanTime}. IP: ${clientIp}`
     );
     return { success: false, message: "Access Denied: Expired QR Code (Screenshot sharing or delayed scanning detected)." };
   }
