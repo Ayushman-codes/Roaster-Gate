@@ -453,7 +453,7 @@ export default function TeacherDashboard({ user, onTriggerRefresh, triggerRefres
                     <tbody>
                       {sessionEnrolledStudents.map(student => {
                         const record = attendanceRecords.find(r => r.studentId === student.id);
-                        const isRegistered = !!student.registeredFingerprint;
+                        const isRegistered = !!student.registeredFingerpring;
 
                         let statusBadge = (
                           <span className="px-2 py-0.5 bg-slate-50 text-slate-400 border border-zinc-200 rounded-full font-semibold text-[10px] dark:bg-zinc-950 dark:border-zinc-800">
