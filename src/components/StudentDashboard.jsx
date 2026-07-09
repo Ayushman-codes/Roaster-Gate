@@ -222,7 +222,7 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
     );
   }
 
-  const isDeviceBound = !!currentUser.registeredFingerpring;
+  const isDeviceBound = !!currentUser.registeredFingerprint;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left max-w-7xl mx-auto py-2">
@@ -269,7 +269,7 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
             <div>
               <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Biometric Status</div>
               <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
-                {currentUser.registeredFingerpring ? "Bound to this device" : "Not registered"}
+                {currentUser.registeredFingerprint ? "Bound to this device" : "Not registered"}
               </div>
             </div>
 
@@ -547,7 +547,7 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
                   <div>
                     <div className="text-[10px] text-zinc-500">Credential ID:</div>
                     <div className="font-mono bg-slate-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 p-2 rounded text-slate-800 dark:text-emerald-400 select-all mt-1 text-[10px] break-all">
-                      {currentUser.registeredFingerpring}
+                      {currentUser.registeredFingerprint}
                     </div>
                   </div>
 

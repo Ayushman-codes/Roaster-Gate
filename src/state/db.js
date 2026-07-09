@@ -132,7 +132,7 @@ export async function registerBiometric(studentId, studentName) {
 
     const { error } = await supabase
       .from('users')
-      .update({ registeredFingerpring: credentialId })
+      .update({ registeredFingerprint: credentialId })
       .eq('id', studentId);
 
     if (error) return { success: false, message: "Database update failed." };
@@ -220,10 +220,10 @@ export async function registerStudentDevice(studentId) {
 }
 
 export async function unbindStudentDevice(studentId) {
-  const { data: user } = await supabase.from('users').select('name, registeredFingerpring').eq('id', studentId).single();
+  const { data: user } = await supabase.from('users').select('name, registeredFingerprint').eq('id', studentId).single();
   if (!user) return { success: false, message: "Student not found" };
 
-  const { error } = await supabase.from('users').update({ registeredFingerpring: null }).eq('id', studentId);
+  const { error } = await supabase.from('users').update({ registeredFingerprint: null }).eq('id', studentId);
   if (error) return { success: false, message: "Database update failed." };
 
   await writeAuditLog("WARN", `Device Unbound by Admin: ${user.name}`, `Cleared fingerprint from student ID: ${studentId}`);
@@ -250,7 +250,7 @@ export async function addUser({ id, name, email, role, password }) {
     email,
     role,
     password,
-    registeredFingerpring: null
+    registeredFingerprint: null
   };
 
   const { error } = await supabase.from('users').insert([newUser]);
@@ -306,13 +306,13 @@ export async function verifyAndSubmitAttendance(studentId, token) {
   const { data: subject } = await supabase.from('subjects').select('*').eq('id', session.subjectId).single();
 
   // 1. Check Biometric Binding
-  if (!student.registeredFingerpring) {
+  if (!student.registeredFingerprint) {
     await writeAuditLog("INFO", `Scan Denied: No Biometric Registered`, `Attempt by ${student.name}`);
     return { success: false, message: "Please register your device biometric before scanning." };
   }
 
   // 2. Trigger real biometric authentication (Touch ID / Face ID)
-  const bioResult = await authenticateBiometric(student.registeredFingerpring);
+  const bioResult = await authenticateBiometric(student.registeredFingerprint);
   if (!bioResult.success) {
     await writeAuditLog("CRITICAL", `Cheating Flagged: Biometric Failed`, `Attempt by ${student.name}. ${bioResult.message}`);
     return { success: false, message: bioResult.message };
@@ -356,7 +356,7 @@ export async function verifyAndSubmitAttendance(studentId, token) {
     timestamp: scanTime,
     status: "Present",
     ipAddress: clientIp,
-    fingerprint: student.registeredFingerpring,
+    fingerprint: student.registeredFingerprint,
     method: "Biometric QR Verified"
   };
 
@@ -450,7 +450,7 @@ export async function resetSystemData() {
     supabase.from('attendance').delete().neq('id', '0'),
     supabase.from('sessions').delete().neq('id', '0'),
     supabase.from('audit_logs').delete().neq('id', '0'),
-    supabase.from('users').update({ registeredFingerpring: null }).neq('id', '0')
+    supabase.from('users').update({ registeredFingerprint: null }).neq('id', '0')
   ]);
 
   const errors = results.filter(r => r.error);

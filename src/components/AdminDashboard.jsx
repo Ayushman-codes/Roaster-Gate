@@ -83,7 +83,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
   }
 
   const students = data.users.filter(u => u.role === "student");
-  const registeredCount = students.filter(s => s.registeredFingerpring).length;
+  const registeredCount = students.filter(s => s.registeredFingerprint).length;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left max-w-7xl mx-auto py-2">
@@ -331,7 +331,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
                         </span>
                       </td>
                       <td className="py-3 font-mono text-[10px]">
-                        {u.registeredFingerpring ? (
+                        {u.registeredFingerprint ? (
                           <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-900/40">Bound</span>
                         ) : (
                           <span className="text-zinc-400">Unbound</span>
@@ -342,7 +342,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
                           {u.role === "student" && (
                             <button
                               onClick={() => handleUnbind(u.id)}
-                              disabled={!u.registeredFingerpring}
+                              disabled={!u.registeredFingerprint}
                               className="px-2.5 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded text-[10px] font-bold disabled:opacity-50 transition cursor-pointer dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-rose-900/30 dark:hover:border-rose-900/50 dark:hover:text-rose-400"
                             >
                               <Unlock className="h-3 w-3 inline mr-0.5" />
