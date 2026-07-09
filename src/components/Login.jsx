@@ -1,54 +1,51 @@
 import { useState, useEffect } from "react";
-import { fetchUsers, getSimulationState, generateBrowserFingerprint } from "../state/db";
-import { UserCheck, ShieldAlert, BookOpen, Key, Users, User, ArrowRight, Loader2 } from "lucide-react";
+import { fetchUsers } from "../state/db";
+import { ShieldAlert, Key, Mail, Lock, Loader2 } from "lucide-react";
 
 export default function Login({ onLogin, triggerRefresh }) {
   const [users, setUsers] = useState([]);
-  const [simState, setSimState] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  
-  const [selectedRole, setSelectedRole] = useState(null); // 'student', 'teacher', 'admin'
-  const [selectedUserId, setSelectedUserId] = useState("");
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     async function init() {
       setIsLoading(true);
       const fetchedUsers = await fetchUsers();
       setUsers(fetchedUsers);
-      setSimState(getSimulationState());
       setIsLoading(false);
     }
     init();
   }, [triggerRefresh]);
 
-  const clientFingerprint = simState?.fingerprintOverride || generateBrowserFingerprint();
-  const clientIp = simState?.clientIp || "127.0.0.1";
-
-  const handleRoleSelect = (role) => {
-    setSelectedRole(role);
-    const roleUsers = users.filter(u => u.role === role);
-    if (roleUsers.length > 0) {
-      setSelectedUserId(roleUsers[0].id);
-    } else {
-      setSelectedUserId("");
-    }
-  };
-
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!selectedUserId) return;
+    setError("");
 
-    const user = users.find(u => u.id === selectedUserId);
-    if (!user) return;
-
-    // Check device binding on login if they are a student and have a registered fingerprint
-    if (user.role === "student" && user.registeredFingerprint) {
-      if (user.registeredFingerprint !== clientFingerprint) {
-        alert(`Access Denied! Device Fingerprint Mismatch. \n\nExpected: ${user.registeredFingerprint}\nDetected: ${clientFingerprint}\n\n(Use the Simulation Panel to match the bound fingerprint or log in as Admin to clear this student's device binding).`);
-        return;
-      }
+    if (!email || !password) {
+      setError("Please enter both email and password.");
+      return;
     }
 
+    setIsSubmitting(true);
+
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) {
+      setError("No account found with that email address.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (user.password !== password) {
+      setError("Incorrect password. Please try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    setIsSubmitting(false);
     onLogin(user);
   };
 
@@ -59,8 +56,6 @@ export default function Login({ onLogin, triggerRefresh }) {
       </div>
     );
   }
-
-  const filteredUsers = users.filter(u => u.role === selectedRole);
 
   return (
     <div className="min-h-[90svh] flex flex-col justify-center items-center py-10 px-4">
@@ -77,172 +72,75 @@ export default function Login({ onLogin, triggerRefresh }) {
         </p>
       </div>
 
-      {/* Main Form Container */}
+      {/* Login Form */}
       <div className="w-full max-w-md glass rounded-2xl overflow-hidden p-6 sm:p-8 space-y-6">
-        {!selectedRole ? (
-          /* Step 1: Select Role */
-          <div className="space-y-4">
-            <h3 className="text-center font-bold text-lg text-slate-800 dark:text-slate-200 mb-5">
-              Select Your Role
-            </h3>
+        <div className="text-center">
+          <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200">
+            Sign In
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Enter your credentials to access the system
+          </p>
+        </div>
 
-            <div className="grid grid-cols-1 gap-3">
-              {/* Student Role */}
-              <button
-                onClick={() => handleRoleSelect("student")}
-                className="flex items-center justify-between p-4 glass-panel hover:bg-white/55 dark:hover:bg-white/10 hover:border-emerald-500/40 dark:hover:border-emerald-500/40 rounded-xl group cursor-pointer transition-all duration-300"
-              >
-                <div className="flex items-center gap-4 text-left">
-                  <div className="p-3 rounded-lg bg-emerald-400/12 border border-emerald-400/25 text-emerald-600 dark:text-emerald-300 group-hover:bg-emerald-400/18 transition">
-                    <User className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-white">Student Portal</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Mark attendance, check history, bind device</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-              </button>
-
-              {/* Teacher Role */}
-              <button
-                onClick={() => handleRoleSelect("teacher")}
-                className="flex items-center justify-between p-4 glass-panel hover:bg-white/55 dark:hover:bg-white/10 hover:border-emerald-500/40 dark:hover:border-emerald-500/40 rounded-xl group cursor-pointer transition-all duration-300"
-              >
-                <div className="flex items-center gap-4 text-left">
-                  <div className="p-3 rounded-lg bg-sky-400/12 border border-sky-400/25 text-[#0e5b9e] dark:text-sky-300 group-hover:bg-sky-400/18 transition">
-                    <BookOpen className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-white">Teacher Dashboard</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Generate QR sessions, oversee live attendance</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 group-hover:translate-x-1 transition-all" />
-              </button>
-
-              {/* Admin Role */}
-              <button
-                onClick={() => handleRoleSelect("admin")}
-                className="flex items-center justify-between p-4 glass-panel hover:bg-white/55 dark:hover:bg-white/10 hover:border-amber-500/40 dark:hover:border-amber-500/40 rounded-xl group cursor-pointer transition-all duration-300"
-              >
-                <div className="flex items-center gap-4 text-left">
-                  <div className="p-3 rounded-lg bg-amber-400/12 border border-amber-400/25 text-amber-600 dark:text-amber-300 group-hover:bg-amber-400/18 transition">
-                    <Users className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-amber-600 dark:group-hover:text-white">Administrator</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">System configuration, device clearing, logs</p>
-                  </div>
-                </div>
-                <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-amber-600 dark:group-hover:text-amber-400 group-hover:translate-x-1 transition-all" />
-              </button>
+        <form onSubmit={handleLoginSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                id="email"
+                type="email"
+                required
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@college.edu"
+                className="w-full pl-10 pr-3 py-2.5 bg-white/45 border border-white/60 dark:bg-white/5 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500"
+              />
             </div>
           </div>
-        ) : (
-          /* Step 2: Select Mock Account */
-          <form onSubmit={handleLoginSubmit} className="space-y-5">
-            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-800">
-              <span className="font-semibold text-sm text-emerald-650 dark:text-emerald-400 capitalize flex items-center gap-1.5">
-                {selectedRole === "student" && <User className="h-4 w-4" />}
-                {selectedRole === "teacher" && <BookOpen className="h-4 w-4" />}
-                {selectedRole === "admin" && <Users className="h-4 w-4" />}
-                {selectedRole} Portal
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedRole(null)}
-                className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer"
-              >
-                Back to roles
-              </button>
+
+          <div className="space-y-1.5">
+            <label htmlFor="password" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+              Password
+            </label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                id="password"
+                type="password"
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter your password"
+                className="w-full pl-10 pr-3 py-2.5 bg-white/45 border border-white/60 dark:bg-white/5 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500"
+              />
             </div>
+          </div>
 
-            <div className="space-y-1.5">
-              <label htmlFor="userSelect" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                Select Mock Account
-              </label>
-              <select
-                id="userSelect"
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full bg-white/45 border border-white/60 dark:bg-white/5 dark:border-white/10 rounded-lg p-2.5 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500 cursor-pointer"
-              >
-                {filteredUsers.map(u => (
-                  <option key={u.id} value={u.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-200">
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-              </select>
+          {error && (
+            <div className="p-3 rounded-lg text-xs bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/30 text-rose-800 dark:text-rose-400 flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
+          )}
 
-            {/* If Student: Show current device binding status preview */}
-            {selectedRole === "student" && selectedUserId && (() => {
-              const currentStu = users.find(u => u.id === selectedUserId);
-              if (!currentStu) return null;
-
-              const isBound = !!currentStu.registeredFingerprint;
-              const fingerprintMatches = currentStu.registeredFingerprint === clientFingerprint;
-
-              return (
-                <div className={`p-4 rounded-xl text-xs space-y-2 ${isBound
-                  ? fingerprintMatches
-                    ? "glass-emerald text-emerald-800 dark:text-emerald-200"
-                    : "glass-rose text-rose-800 dark:text-rose-200"
-                  : "glass-panel text-slate-750 dark:text-slate-300"
-                  }`}>
-                  <div className="font-semibold flex items-center gap-1.5">
-                    {isBound ? (
-                      fingerprintMatches ? (
-                        <>
-                          <UserCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                          <span>Authorized Device Connected</span>
-                        </>
-                      ) : (
-                        <>
-                          <ShieldAlert className="h-4 w-4 text-rose-600 dark:text-rose-400 animate-bounce" />
-                          <span>Warning: Fingerprint Mismatch!</span>
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <ShieldAlert className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        <span>No Device Registered Yet</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="opacity-90 leading-relaxed font-sans text-slate-650 dark:text-slate-350">
-                    {isBound ? (
-                      fingerprintMatches ? (
-                        "This device fingerprint matches the registered device. You are authorized to log in."
-                      ) : (
-                        `This account is locked to fingerprint [${currentStu.registeredFingerprint}]. Detected browser fingerprint is [${clientFingerprint}]. Log in blocked.`
-                      )
-                    ) : (
-                      "Your account has no registered device. You will need to bind this browser fingerprint on your first dashboard visit."
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            <button
-              type="submit"
-              className="w-full py-3 px-4 bg-[#0e5b9e]/90 hover:bg-[#004b87] active:bg-[#063d6b] text-white rounded-lg shadow-lg shadow-sky-900/15 border border-white/20 font-semibold text-sm cursor-pointer transition-all duration-300 transform active:scale-98"
-            >
-              Sign In
-            </button>
-          </form>
-        )}
-      </div>
-
-      {/* Simulation Info Banner */}
-      <div className="mt-8 text-center text-xs text-slate-600 dark:text-slate-300 max-w-sm font-sans space-y-1 glass-panel p-3 rounded-lg">
-        <div className="font-semibold text-slate-600 dark:text-slate-400 flex items-center justify-center gap-1">
-          <span>Simulation Active</span>
-        </div>
-        <div>Detected IP: <span className="text-emerald-650 dark:text-emerald-400 font-mono font-semibold">{clientIp}</span></div>
-        <div>Fingerprint: <span className="text-slate-700 dark:text-slate-400 font-mono font-semibold">{clientFingerprint}</span></div>
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="w-full py-3 px-4 bg-[#0e5b9e]/90 hover:bg-[#004b87] active:bg-[#063d6b] text-white rounded-lg shadow-lg shadow-sky-900/15 border border-white/20 font-semibold text-sm cursor-pointer transition-all duration-300 transform active:scale-98 disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {isSubmitting ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Signing in...</>
+            ) : (
+              "Sign In"
+            )}
+          </button>
+        </form>
       </div>
     </div>
   );

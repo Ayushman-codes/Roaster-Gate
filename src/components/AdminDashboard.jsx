@@ -16,7 +16,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
   const [isAddUserLoaded, setIsAddUserLoaded] = useState(false);
 
   // Add User Form State
-  const [newUser, setNewUser] = useState({ id: "", name: "", email: "", role: "student" });
+  const [newUser, setNewUser] = useState({ id: "", name: "", email: "", role: "student", password: "" });
   const [addUserMessage, setAddUserMessage] = useState(null);
   const [isAddingUser, setIsAddingUser] = useState(false);
 
@@ -59,7 +59,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
     setIsAddingUser(false);
 
     if (res.success) {
-      setNewUser({ id: "", name: "", email: "", role: "student" });
+      setNewUser({ id: "", name: "", email: "", role: "student", password: "" });
       onTriggerRefresh();
     }
   };
@@ -247,6 +247,19 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
                       <option value="teacher">Teacher</option>
                     </select>
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
+                      Password *
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={newUser.password}
+                      onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                      placeholder="Set login password"
+                      className="w-full bg-slate-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-3 py-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
                 </div>
 
                 {addUserMessage && (
@@ -319,7 +332,7 @@ export default function AdminDashboard({ user, onTriggerRefresh, triggerRefresh 
                       </td>
                       <td className="py-3 font-mono text-[10px]">
                         {u.registeredFingerprint ? (
-                          <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-900/40">{u.registeredFingerprint}</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 px-2 py-1 rounded border border-emerald-200 dark:border-emerald-900/40">Bound</span>
                         ) : (
                           <span className="text-zinc-400">Unbound</span>
                         )}

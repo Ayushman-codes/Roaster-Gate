@@ -70,21 +70,115 @@ export async function writeAuditLog(level, message, details) {
   return newLog;
 }
 
-export function generateBrowserFingerprint() {
-  const userAgent = navigator.userAgent;
-  const screenWidth = window.screen.width;
-  const screenHeight = window.screen.height;
-  const language = navigator.language;
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+// ------------------------------------------------------------------
+// WEBAUTHN BIOMETRIC HELPERS
+// ------------------------------------------------------------------
 
-  const rawFingerprint = `${userAgent}-${screenWidth}x${screenHeight}-${language}-${timezone}`;
-  let hash = 0;
-  for (let i = 0; i < rawFingerprint.length; i++) {
-    const char = rawFingerprint.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
+function bufferToBase64url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+function base64urlToBuffer(base64url) {
+  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  const buffer = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) buffer[i] = binary.charCodeAt(i);
+  return buffer.buffer;
+}
+
+function generateChallenge() {
+  const challenge = new Uint8Array(32);
+  crypto.getRandomValues(challenge);
+  return challenge.buffer;
+}
+
+export async function registerBiometric(studentId, studentName) {
+  if (!window.navigator?.credentials) {
+    return { success: false, message: "WebAuthn is not supported on this device. Biometric registration requires a device with Touch ID, Face ID, or a security key." };
   }
-  return "DEV_FP_" + Math.abs(hash).toString(16).toUpperCase();
+
+  const challenge = generateChallenge();
+  const userId = new TextEncoder().encode(studentId);
+
+  try {
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: "SecureAttendance", id: window.location.hostname },
+        user: {
+          id: userId,
+          name: studentId,
+          displayName: studentName
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },   // ES256
+          { type: "public-key", alg: -257 }  // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",
+          userVerification: "required",
+          residentKey: "preferred"
+        },
+        timeout: 60000,
+        attestation: "none"
+      }
+    });
+
+    const credentialId = bufferToBase64url(credential.rawId);
+
+    const { error } = await supabase
+      .from('users')
+      .update({ registeredFingerprint: credentialId })
+      .eq('id', studentId);
+
+    if (error) return { success: false, message: "Database update failed." };
+
+    await writeAuditLog("INFO", `Biometric Binding Successful: ${studentName}`, `Credential ${credentialId.substring(0, 20)}... bound to student ID: ${studentId}`);
+    return { success: true, message: "Biometric device bound successfully." };
+  } catch (err) {
+    if (err.name === "NotAllowedError") {
+      return { success: false, message: "Biometric registration was cancelled. Please try again and approve the biometric prompt." };
+    }
+    return { success: false, message: `Biometric registration failed: ${err.message}` };
+  }
+}
+
+export async function authenticateBiometric(credentialId) {
+  if (!window.navigator?.credentials) {
+    return { success: false, message: "WebAuthn is not supported on this device." };
+  }
+
+  const challenge = generateChallenge();
+
+  try {
+    const assertion = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        timeout: 60000,
+        userVerification: "required",
+        allowCredentials: [{
+          id: base64urlToBuffer(credentialId),
+          type: "public-key",
+          transports: ["internal"]
+        }]
+      }
+    });
+
+    return { success: true, authenticatorData: bufferToBase64url(assertion.response.authenticatorData) };
+  } catch (err) {
+    if (err.name === "NotAllowedError") {
+      return { success: false, message: "Biometric verification was cancelled or failed. Please try again." };
+    }
+    return { success: false, message: `Biometric verification failed: ${err.message}` };
+  }
+}
+
+export function isWebAuthnSupported() {
+  return !!window.navigator?.credentials;
 }
 
 // Generate Dynamic QR Payload
@@ -118,19 +212,11 @@ export async function generateQrPayload(sessionId) {
 // DEVICE BINDING
 // ------------------------------------------------------------------
 
-export async function registerStudentDevice(studentId, fingerprint) {
+export async function registerStudentDevice(studentId) {
   const { data: user } = await supabase.from('users').select('name').eq('id', studentId).single();
   if (!user) return { success: false, message: "Student not found" };
 
-  const { error } = await supabase
-    .from('users')
-    .update({ registeredFingerprint: fingerprint })
-    .eq('id', studentId);
-
-  if (error) return { success: false, message: "Database update failed." };
-
-  await writeAuditLog("INFO", `Device Binding Successful: ${user.name}`, `Fingerprint ${fingerprint} bound to student ID: ${studentId}`);
-  return { success: true, message: "Device bound successfully." };
+  return registerBiometric(studentId, user.name);
 }
 
 export async function unbindStudentDevice(studentId) {
@@ -148,8 +234,8 @@ export async function unbindStudentDevice(studentId) {
 // USER MANAGEMENT
 // ------------------------------------------------------------------
 
-export async function addUser({ id, name, email, role }) {
-  if (!id || !name || !email || !role) {
+export async function addUser({ id, name, email, role, password }) {
+  if (!id || !name || !email || !role || !password) {
     return { success: false, message: "All fields are required." };
   }
 
@@ -163,6 +249,7 @@ export async function addUser({ id, name, email, role }) {
     name,
     email,
     role,
+    password,
     registeredFingerprint: null
   };
 
@@ -191,7 +278,6 @@ export async function deleteUser(userId) {
 export async function verifyAndSubmitAttendance(studentId, token) {
   const sim = getSimulationState();
   const scanTime = Date.now() + (sim.timeOffsetSeconds * 1000);
-  const clientFingerprint = sim.fingerprintOverride || generateBrowserFingerprint();
   const clientIp = sim.clientIp;
 
   // Fetch student
@@ -219,25 +305,27 @@ export async function verifyAndSubmitAttendance(studentId, token) {
 
   const { data: subject } = await supabase.from('subjects').select('*').eq('id', session.subjectId).single();
 
-  // 1. Check Binding
+  // 1. Check Biometric Binding
   if (!student.registeredFingerprint) {
-    await writeAuditLog("INFO", `Scan Denied: Device Not Bound`, `Attempt by ${student.name}`);
-    return { success: false, message: "Please register your device fingerprint before scanning." };
+    await writeAuditLog("INFO", `Scan Denied: No Biometric Registered`, `Attempt by ${student.name}`);
+    return { success: false, message: "Please register your device biometric before scanning." };
   }
 
-  if (student.registeredFingerprint !== clientFingerprint) {
-    await writeAuditLog("CRITICAL", `Cheating Flagged: Unauthorized Device`, `Attempt by ${student.name}`);
-    return { success: false, message: "Access Denied: Different device fingerprint detected." };
+  // 2. Trigger real biometric authentication (Touch ID / Face ID)
+  const bioResult = await authenticateBiometric(student.registeredFingerprint);
+  if (!bioResult.success) {
+    await writeAuditLog("CRITICAL", `Cheating Flagged: Biometric Failed`, `Attempt by ${student.name}. ${bioResult.message}`);
+    return { success: false, message: bioResult.message };
   }
 
-  // 2. Check QR Age
+  // 3. Check QR Age
   const tokenAge = scanTime - tokenTimestamp;
   if (tokenAge < -(QR_WINDOW_MS * 2) || tokenAge > QR_WINDOW_MS * 2) {
     await writeAuditLog("CRITICAL", `Cheating Flagged: Expired QR`, `Attempt by ${student.name}`);
     return { success: false, message: "Access Denied: Expired QR Code." };
   }
 
-  // 3. Check Subnet
+  // 4. Check Subnet
   if (subject?.subnet) {
     const subnetPrefix = subject.subnet.replace("*", "");
     if (!clientIp.startsWith(subnetPrefix)) {
@@ -246,7 +334,7 @@ export async function verifyAndSubmitAttendance(studentId, token) {
     }
   }
 
-  // 4. Check if already marked
+  // 5. Check if already marked
   const { data: existing } = await supabase.from('attendance')
     .select('id')
     .eq('studentId', studentId)
@@ -268,12 +356,12 @@ export async function verifyAndSubmitAttendance(studentId, token) {
     timestamp: scanTime,
     status: "Present",
     ipAddress: clientIp,
-    fingerprint: clientFingerprint,
-    method: "Dynamic QR Verified"
+    fingerprint: student.registeredFingerprint,
+    method: "Biometric QR Verified"
   };
 
   await supabase.from('attendance').insert([newAttendance]);
-  await writeAuditLog("INFO", `Attendance Marked: ${student.name}`, `Method: Dynamic QR. IP: ${clientIp}.`);
+  await writeAuditLog("INFO", `Attendance Marked: ${student.name}`, `Method: Biometric QR. IP: ${clientIp}.`);
 
   return { success: true, message: `Attendance marked successfully!` };
 }

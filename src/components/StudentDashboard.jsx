@@ -4,9 +4,9 @@ import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import {
   fetchUsers, fetchSessions, fetchSubjects, fetchAttendance,
   getSimulationState,
-  generateBrowserFingerprint,
   registerStudentDevice,
-  verifyAndSubmitAttendance
+  verifyAndSubmitAttendance,
+  isWebAuthnSupported
 } from "../state/db";
 import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, UserCheck, Loader2 } from "lucide-react";
 
@@ -45,7 +45,6 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
   }, [triggerRefresh]);
 
   const currentUser = data.users.find(u => u.id === user.id) ?? user;
-  const clientFingerprint = simState?.fingerprintOverride || generateBrowserFingerprint();
   
   const activeSessionBase = data.sessions.length > 0
     ? [...data.sessions].sort((a, b) => {
@@ -72,7 +71,7 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
     .sort((a, b) => b.timestamp - a.timestamp);
 
   const handleRegisterDevice = async () => {
-    const res = await registerStudentDevice(currentUser.id, clientFingerprint);
+    const res = await registerStudentDevice(currentUser.id);
     if (res.success) {
       onTriggerRefresh();
     } else {
@@ -224,7 +223,6 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
   }
 
   const isDeviceBound = !!currentUser.registeredFingerprint;
-  const isFingerprintMatch = currentUser.registeredFingerprint === clientFingerprint;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left max-w-7xl mx-auto py-2">
@@ -269,9 +267,9 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
             </div>
 
             <div>
-              <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Student Unique ID (Fingerprint)</div>
+              <div className="text-[10px] text-zinc-450 dark:text-zinc-500 uppercase font-semibold">Biometric Status</div>
               <div className="font-mono text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
-                {currentUser.registeredFingerprint || "Unregistered (-)"}
+                {currentUser.registeredFingerprint ? "Bound to this device" : "Not registered"}
               </div>
             </div>
 
@@ -279,12 +277,11 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
               <button
                 onClick={() => {
                   setIsDeviceLoaded(true);
-                  // Scroll to device card
                   document.getElementById("device-card")?.scrollIntoView({ behavior: "smooth" });
                 }}
                 className="juno-btn-secondary w-full text-center"
               >
-                Link Device Fingerprint
+                Register Biometric
               </button>
             </div>
           </div>
@@ -511,16 +508,16 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
           )}
         </div>
 
-        {/* Card 2: Device Fingerprint Registration */}
+        {/* Card 2: Biometric Registration */}
         <div id="device-card" className="juno-card">
           <div className="flex justify-between items-start gap-4">
             <div className="flex-1">
               <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-2">
                 <Laptop className="h-4.5 w-4.5 text-[#0e5b9e] dark:text-[#10b981]" />
-                <span>Device Fingerprint Registration</span>
+                <span>Biometric Device Registration</span>
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Link your active device characteristics to lock your profile and prevent proxy attendance.
+                Register your device biometric (Touch ID / Face ID) to prevent proxy attendance.
               </p>
             </div>
             <button
@@ -533,69 +530,59 @@ export default function StudentDashboard({ user, onTriggerRefresh, triggerRefres
 
           {isDeviceLoaded ? (
             <div className="mt-4 pt-4 border-t border-zinc-150 dark:border-zinc-800 space-y-4 animate-fade-in">
-              {isDeviceBound ? (
+              {!isWebAuthnSupported() ? (
+                <div className="p-3 bg-rose-50 border border-rose-250 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400 rounded-lg flex gap-2">
+                  <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
+                  <p className="leading-relaxed">
+                    WebAuthn is not supported on this device. Biometric registration requires a device with Touch ID, Face ID, or a security key.
+                  </p>
+                </div>
+              ) : isDeviceBound ? (
                 <div className="space-y-3.5 text-xs">
                   <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900/30 dark:text-emerald-400 rounded-lg">
                     <UserCheck className="h-4.5 w-4.5 text-emerald-500 shrink-0" />
-                    <span>Fingerprint Bound and Authenticated</span>
+                    <span>Biometric Registered & Ready</span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <div className="text-[10px] text-zinc-500">Bound Fingerprint Hash:</div>
-                      <div className="font-mono bg-slate-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 p-2 rounded text-slate-800 dark:text-emerald-400 select-all mt-1">
-                        {currentUser.registeredFingerprint}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] text-zinc-500">Detected Fingerprint Hash:</div>
-                      <div className={`font-mono p-2 rounded border select-all mt-1 ${isFingerprintMatch
-                        ? "bg-slate-50 dark:bg-zinc-950 border-emerald-300 dark:border-emerald-900/30 text-emerald-700 dark:text-emerald-400"
-                        : "bg-rose-50 dark:bg-zinc-950 border-rose-350 dark:border-rose-900/30 text-rose-700 dark:text-rose-450"
-                        }`}>
-                        {clientFingerprint}
-                      </div>
+                  <div>
+                    <div className="text-[10px] text-zinc-500">Credential ID:</div>
+                    <div className="font-mono bg-slate-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 p-2 rounded text-slate-800 dark:text-emerald-400 select-all mt-1 text-[10px] break-all">
+                      {currentUser.registeredFingerprint}
                     </div>
                   </div>
 
-                  {!isFingerprintMatch && (
-                    <div className="p-3.5 bg-rose-50 border border-rose-250 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900/30 dark:text-rose-400 rounded-lg flex gap-2">
-                      <AlertTriangle className="h-5 w-5 text-rose-500 shrink-0" />
-                      <p className="leading-relaxed">
-                        Access Blocked: Browser fingerprint mismatch. You must log in as Administrator to clear this student's device binding.
-                      </p>
-                    </div>
-                  )}
+                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                    Your device biometric is registered. When you scan a QR code, your phone will prompt for Touch ID / Face ID to verify your identity.
+                  </p>
+
+                  <button
+                    onClick={handleRegisterDevice}
+                    className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-sm font-semibold text-xs cursor-pointer transition-all"
+                  >
+                    Re-register Biometric
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-3.5 text-xs">
                   <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 dark:bg-amber-950/20 dark:border-amber-900/30 dark:text-amber-400 rounded-lg flex gap-2">
                     <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
                     <p className="leading-relaxed">
-                      Device binding is required. Linked profiles ensure other users cannot check-in for you.
+                      Biometric registration is required. This ensures only you can mark attendance from this device.
                     </p>
-                  </div>
-
-                  <div>
-                    <div className="text-[10px] text-zinc-500">Detected Fingerprint:</div>
-                    <div className="font-mono bg-slate-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-850 p-2.5 rounded text-amber-600 dark:text-amber-400 select-all mt-1">
-                      {clientFingerprint}
-                    </div>
                   </div>
 
                   <button
                     onClick={handleRegisterDevice}
                     className="juno-btn-primary w-full"
                   >
-                    Bind Current Device Fingerprint
+                    Register Device Biometric
                   </button>
                 </div>
               )}
             </div>
           ) : (
             <p className="text-xs text-zinc-450 dark:text-zinc-500 mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-              Click Load to fetch system device fingerprint mappings.
+              Click Load to set up biometric authentication.
             </p>
           )}
         </div>

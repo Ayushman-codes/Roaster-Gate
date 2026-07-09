@@ -1,14 +1,11 @@
 import { useState, useEffect } from "react";
-import { getSimulationState, saveSimulationState, generateBrowserFingerprint, QR_WINDOW_MS } from "../state/db";
+import { getSimulationState, saveSimulationState, QR_WINDOW_MS } from "../state/db";
 import { Terminal, Shield, Cpu, RefreshCw, X, Radio } from "lucide-react";
 
 export default function SimulationPanel({ onUpdate }) {
   const [isOpen, setIsOpen] = useState(false);
   const [clientIp, setClientIp] = useState("192.168.1.45");
   const [timeOffset, setTimeOffset] = useState(0);
-  const [spoofFingerprint, setSpoofFingerprint] = useState(false);
-  const [customFingerprint, setCustomFingerprint] = useState("DEV_FP_SPOOFED_999X");
-  const [realFingerprint] = useState(() => generateBrowserFingerprint());
   const [activeSessionToken, setActiveSessionToken] = useState("");
 
   useEffect(() => {
@@ -28,11 +25,11 @@ export default function SimulationPanel({ onUpdate }) {
     return () => clearInterval(interval);
   }, []);
 
-  const applySettings = (newIp, newOffset, newSpoof, newCustomFp) => {
+  const applySettings = (newIp, newOffset) => {
     const sim = {
       clientIp: newIp,
       timeOffsetSeconds: parseInt(newOffset) || 0,
-      fingerprintOverride: newSpoof ? newCustomFp : ""
+      fingerprintOverride: ""
     };
     saveSimulationState(sim);
     if (onUpdate) onUpdate();
@@ -40,25 +37,13 @@ export default function SimulationPanel({ onUpdate }) {
 
   const handleIpChange = (ip) => {
     setClientIp(ip);
-    applySettings(ip, timeOffset, spoofFingerprint, customFingerprint);
+    applySettings(ip, timeOffset);
   };
 
   const handleOffsetChange = (offset) => {
     setTimeOffset(offset);
-    applySettings(clientIp, offset, spoofFingerprint, customFingerprint);
+    applySettings(clientIp, offset);
   };
-
-  const handleSpoofToggle = (checked) => {
-    setSpoofFingerprint(checked);
-    applySettings(clientIp, timeOffset, checked, customFingerprint);
-  };
-
-  const handleCustomFpChange = (val) => {
-    setCustomFingerprint(val);
-    applySettings(clientIp, timeOffset, spoofFingerprint, val);
-  };
-
-  const activeFingerprint = spoofFingerprint ? customFingerprint : realFingerprint;
 
   return (
     <>
@@ -93,7 +78,7 @@ export default function SimulationPanel({ onUpdate }) {
         {/* Contents */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6 text-sm">
           <p className="text-xs text-slate-400 leading-relaxed">
-            Use these controls to simulate hacking attempts (e.g. screenshot sharing, location spoofing, account sharing) and test the system's defenses.
+            Use these controls to simulate hacking attempts (e.g. screenshot sharing, location spoofing) and test the system's defenses.
           </p>
 
           {/* 1. Client IP / Subnet */}
@@ -191,37 +176,7 @@ export default function SimulationPanel({ onUpdate }) {
             </div>
           </div>
 
-          {/* 3. Device Spoofing (Fingerprint Control) */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-emerald-300 uppercase tracking-wider">
-              Device Spoofing (Fingerprinting)
-            </label>
-            <div className="p-3 bg-slate-950/40 border border-slate-800 rounded-lg space-y-3">
-              <label className="flex items-center gap-2 text-xs font-medium text-slate-300 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={spoofFingerprint}
-                  onChange={(e) => handleSpoofToggle(e.target.checked)}
-                  className="rounded border-slate-700 text-emerald-600 bg-slate-950 focus:ring-emerald-500 focus:ring-offset-slate-900 h-4 w-4 cursor-pointer"
-                />
-                Spoof Device Fingerprint
-              </label>
-
-              {spoofFingerprint && (
-                <div className="space-y-1">
-                  <span className="text-[10px] text-slate-400">Custom Fingerprint Hash:</span>
-                  <input
-                    type="text"
-                    value={customFingerprint}
-                    onChange={(e) => handleCustomFpChange(e.target.value)}
-                    className="w-full px-2.5 py-1.5 bg-slate-950/60 border border-slate-800 rounded text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 4. Diagnostics Feed */}
+          {/* 3. Diagnostics Feed */}
           <div className="space-y-2.5">
             <label className="block text-xs font-semibold text-emerald-300 uppercase tracking-wider flex items-center gap-1">
               <Cpu className="h-3.5 w-3.5" /> Live Diagnostic Feed
@@ -231,15 +186,13 @@ export default function SimulationPanel({ onUpdate }) {
                 <span className="text-slate-500">Client IP:</span>{" "}
                 <span className="text-emerald-400">{clientIp}</span>
               </div>
-              <div>
-                <span className="text-slate-500">Active FP:</span>{" "}
-                <span className={spoofFingerprint ? "text-amber-400" : "text-emerald-400"}>
-                  {activeFingerprint}
-                </span>
-              </div>
               <div className="border-t border-slate-900 pt-2 mt-1">
                 <span className="text-slate-500">Local Time Offset:</span>{" "}
                 <span className="text-slate-300">{timeOffset}s</span>
+              </div>
+              <div className="border-t border-slate-900 pt-2 mt-1">
+                <span className="text-slate-500">Biometric:</span>{" "}
+                <span className="text-emerald-400">WebAuthn (cannot be spoofed)</span>
               </div>
               {activeSessionToken ? (
                 <div className="space-y-1">
@@ -269,7 +222,6 @@ export default function SimulationPanel({ onUpdate }) {
               saveSimulationState({ clientIp: "192.168.1.45", timeOffsetSeconds: 0, fingerprintOverride: "" });
               setClientIp("192.168.1.45");
               setTimeOffset(0);
-              setSpoofFingerprint(false);
               if (onUpdate) onUpdate();
             }}
             className="flex items-center gap-1 px-2 py-1 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded cursor-pointer transition"
