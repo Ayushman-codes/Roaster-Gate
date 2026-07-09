@@ -145,6 +145,46 @@ export async function unbindStudentDevice(studentId) {
 }
 
 // ------------------------------------------------------------------
+// USER MANAGEMENT
+// ------------------------------------------------------------------
+
+export async function addUser({ id, name, email, role }) {
+  if (!id || !name || !email || !role) {
+    return { success: false, message: "All fields are required." };
+  }
+
+  const { data: existing } = await supabase.from('users').select('id').eq('id', id).single();
+  if (existing) {
+    return { success: false, message: `A user with ID "${id}" already exists.` };
+  }
+
+  const newUser = {
+    id,
+    name,
+    email,
+    role,
+    registeredFingerprint: null
+  };
+
+  const { error } = await supabase.from('users').insert([newUser]);
+  if (error) return { success: false, message: "Failed to add user: " + error.message };
+
+  await writeAuditLog("INFO", `User Added: ${name}`, `Role: ${role}. ID: ${id}. Email: ${email}`);
+  return { success: true, message: `${role} "${name}" added successfully.` };
+}
+
+export async function deleteUser(userId) {
+  const { data: user } = await supabase.from('users').select('name, role').eq('id', userId).single();
+  if (!user) return { success: false, message: "User not found." };
+
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) return { success: false, message: "Failed to delete user." };
+
+  await writeAuditLog("WARN", `User Deleted: ${user.name}`, `Role: ${user.role}. ID: ${userId}`);
+  return { success: true, message: `User "${user.name}" deleted.` };
+}
+
+// ------------------------------------------------------------------
 // CORE ATTENDANCE LOGIC
 // ------------------------------------------------------------------
 
