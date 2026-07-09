@@ -1,18 +1,32 @@
-import { useState } from "react";
-import { loadDB, generateBrowserFingerprint } from "../state/db";
-import { UserCheck, ShieldAlert, BookOpen, Key, Users, User, ArrowRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { fetchUsers, getSimulationState, generateBrowserFingerprint } from "../state/db";
+import { UserCheck, ShieldAlert, BookOpen, Key, Users, User, ArrowRight, Loader2 } from "lucide-react";
 
-export default function Login({ onLogin }) {
+export default function Login({ onLogin, triggerRefresh }) {
+  const [users, setUsers] = useState([]);
+  const [simState, setSimState] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [selectedRole, setSelectedRole] = useState(null); // 'student', 'teacher', 'admin'
   const [selectedUserId, setSelectedUserId] = useState("");
-  const db = loadDB();
-  const users = db.users;
-  const clientFingerprint = db.simulation.fingerprintOverride || generateBrowserFingerprint();
-  const clientIp = db.simulation.clientIp;
+
+  useEffect(() => {
+    async function init() {
+      setIsLoading(true);
+      const fetchedUsers = await fetchUsers();
+      setUsers(fetchedUsers);
+      setSimState(getSimulationState());
+      setIsLoading(false);
+    }
+    init();
+  }, [triggerRefresh]);
+
+  const clientFingerprint = simState?.fingerprintOverride || generateBrowserFingerprint();
+  const clientIp = simState?.clientIp || "127.0.0.1";
 
   const handleRoleSelect = (role) => {
     setSelectedRole(role);
-    const roleUsers = db.users.filter(u => u.role === role);
+    const roleUsers = users.filter(u => u.role === role);
     if (roleUsers.length > 0) {
       setSelectedUserId(roleUsers[0].id);
     } else {
@@ -24,8 +38,7 @@ export default function Login({ onLogin }) {
     e.preventDefault();
     if (!selectedUserId) return;
 
-    const db = loadDB();
-    const user = db.users.find(u => u.id === selectedUserId);
+    const user = users.find(u => u.id === selectedUserId);
     if (!user) return;
 
     // Check device binding on login if they are a student and have a registered fingerprint
@@ -38,6 +51,14 @@ export default function Login({ onLogin }) {
 
     onLogin(user);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[90svh] flex justify-center items-center">
+        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
 
   const filteredUsers = users.filter(u => u.role === selectedRole);
 

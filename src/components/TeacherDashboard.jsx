@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  loadDB,
+  fetchUsers, fetchSessions, fetchSubjects, fetchAttendance, getSimulationState,
   startTeacherSession,
   endTeacherSession,
   generateQrPayload,
@@ -9,9 +9,12 @@ import {
 } from "../state/db";
 import { QRCodeSVG } from "qrcode.react";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } from "recharts";
-import { Play, Users, Eye } from "lucide-react";
+import { Play, Users, Eye, Loader2 } from "lucide-react";
 
-export default function TeacherDashboard({ user, onTriggerRefresh }) {
+export default function TeacherDashboard({ user, onTriggerRefresh, triggerRefresh }) {
+  const [data, setData] = useState({ users: [], sessions: [], subjects: [], attendance: [] });
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [selectedSubjectId, setSelectedSubjectId] = useState("");
 
   const lastTimestampRef = useRef(0);
@@ -25,12 +28,23 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
   const [isAnalyticsLoaded, setIsAnalyticsLoaded] = useState(false);
   const [isRosterLoaded, setIsRosterLoaded] = useState(true);
 
-  const db = loadDB();
-  const subjects = db.subjects.filter(s => s.teacherId === user.id);
-  const activeSession = db.sessions.find(s => s.teacherId === user.id) || null;
-  const sessionEnrolledStudents = db.users.filter(u => u.role === "student");
+  useEffect(() => {
+    async function loadAllData() {
+      setIsLoading(true);
+      const [u, se, su, a] = await Promise.all([
+        fetchUsers(), fetchSessions(), fetchSubjects(), fetchAttendance()
+      ]);
+      setData({ users: u, sessions: se, subjects: su, attendance: a });
+      setIsLoading(false);
+    }
+    loadAllData();
+  }, [triggerRefresh]);
+
+  const subjects = data.subjects.filter(s => s.teacherId === user.id);
+  const activeSession = data.sessions.find(s => s.teacherId === user.id) || null;
+  const sessionEnrolledStudents = data.users.filter(u => u.role === "student");
   const attendanceRecords = activeSession
-    ? db.attendance.filter(a => a.sessionId === activeSession.id)
+    ? data.attendance.filter(a => a.sessionId === activeSession.id)
     : [];
   const effectiveSelectedSubjectId = selectedSubjectId || subjects[0]?.id || "";
 
@@ -53,17 +67,20 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
   // Periodic QR Code Refresh Logic
   useEffect(() => {
     if (!activeSession) return;
+    let isMounted = true;
 
     // Helper function to update the token
-    const updateQR = (timestamp) => {
-      const payloadInfo = generateQrPayload(activeSession.id);
-      setQrToken(payloadInfo.token);
-      lastTimestampRef.current = timestamp;
+    const updateQR = async (timestamp) => {
+      const payloadInfo = await generateQrPayload(activeSession.id);
+      if (isMounted) {
+        setQrToken(payloadInfo.token);
+        lastTimestampRef.current = timestamp;
+      }
     };
 
     const interval = setInterval(() => {
-      const db = loadDB();
-      const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
+      const sim = getSimulationState();
+      const timeOffsetMs = sim.timeOffsetSeconds * 1000;
       const currentTimestamp = Date.now() + timeOffsetMs;
 
       // Calculate milliseconds left in the current rolling interval
@@ -78,14 +95,17 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
       if (windowTimestamp !== lastTimestampRef.current) {
         updateQR(windowTimestamp);
       }
-    }, 100);
+    }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [activeSession?.id]);
 
-  const handleStartSession = () => {
+  const handleStartSession = async () => {
     if (!effectiveSelectedSubjectId) return;
-    const res = startTeacherSession(user.id, effectiveSelectedSubjectId);
+    const res = await startTeacherSession(user.id, effectiveSelectedSubjectId);
     if (res.success) {
       onTriggerRefresh();
     } else {
@@ -93,22 +113,30 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
     }
   };
 
-  const handleEndSession = () => {
+  const handleEndSession = async () => {
     if (!activeSession) return;
-    const res = endTeacherSession(activeSession.id);
+    const res = await endTeacherSession(activeSession.id);
     if (res.success) {
       setQrToken("");
       onTriggerRefresh();
     }
   };
 
-  const handleOverride = (studentId, status) => {
+  const handleOverride = async (studentId, status) => {
     if (!activeSession) return;
-    const res = submitManualOverride(studentId, activeSession.id, status);
+    const res = await submitManualOverride(studentId, activeSession.id, status);
     if (res.success) {
       onTriggerRefresh();
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="w-full flex justify-center py-20">
+        <Loader2 className="h-8 w-8 text-[#0e5b9e] animate-spin" />
+      </div>
+    );
+  }
 
   // Compute live stats for dashboard cards
   const totalStudents = sessionEnrolledStudents.length;
@@ -283,7 +311,7 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                     {qrToken ? (
                       <QRCodeSVG value={qrToken} size={300} level="M" marginSize={2} bgColor="#ffffff" fgColor="#020617" />
                     ) : (
-                      <div className="h-[280px] w-[280px] bg-slate-200 rounded animate-pulse"></div>
+                      <div className="h-[280px] w-[280px] bg-slate-200 rounded animate-pulse flex items-center justify-center text-xs text-slate-500">Generating payload...</div>
                     )}
                     {/* Countdown overlay circle indicator */}
                     <div className="absolute -bottom-3 -right-3 flex items-center justify-center bg-slate-900 border border-slate-850 rounded-full h-11 w-11 shadow-md text-xs font-mono font-bold text-emerald-400 select-none">
@@ -294,7 +322,7 @@ export default function TeacherDashboard({ user, onTriggerRefresh }) {
                   <div className="w-full space-y-1.5 text-left border-t border-zinc-150 dark:border-zinc-800 pt-3">
                     <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">Raw Token Payload (Sniffer Debug View)</span>
                     <div className="text-[9px] break-all bg-slate-50 dark:bg-slate-950/60 p-2 border border-zinc-200 dark:border-zinc-800 rounded font-mono select-all text-slate-650 dark:text-slate-400">
-                      {qrToken}
+                      {qrToken || "Loading..."}
                     </div>
                   </div>
 

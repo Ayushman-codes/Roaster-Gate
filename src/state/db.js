@@ -1,76 +1,75 @@
-// Local database & security logic simulation for Secure Attendance Tracking
+import { supabase } from './supabaseClient';
 
-const DEFAULT_USERS = [
-  { id: "stu_alice", name: "Alice Smith", role: "student", email: "alice@university.edu", registeredFingerprint: null },
-  { id: "stu_bob", name: "Bob Jones", role: "student", email: "bob@university.edu", registeredFingerprint: null },
-  { id: "stu_charlie", name: "Charlie Brown", role: "student", email: "charlie@university.edu", registeredFingerprint: null },
-  { id: "teach_turing", name: "Dr. Alan Turing", role: "teacher", email: "turing@university.edu" },
-  { id: "teach_hopper", name: "Prof. Grace Hopper", role: "teacher", email: "hopper@university.edu" },
-  { id: "admin_chief", name: "System Admin", role: "admin", email: "admin@university.edu" }
-];
+export const QR_WINDOW_MS = 15000;
 
-const DEFAULT_SUBJECTS = [
-  { id: "CS-101", name: "Introduction to Cryptography", teacherId: "teach_turing", schedule: "Mon/Wed 10:00 AM", room: "Room LH-101", subnet: "192.168.1.*" },
-  { id: "CS-102", name: "Advanced Compiler Design", teacherId: "teach_hopper", schedule: "Tue/Thu 2:00 PM", room: "Lab A", subnet: "10.0.0.*" },
-  { id: "CS-103", name: "Neural Networks & Deep Learning", teacherId: "teach_turing", schedule: "Fri 1:00 PM", room: "Room LH-202", subnet: "192.168.1.*" }
-];
-
+// Default simulation state (kept in local storage so the UI sandbox panel still works)
 const DEFAULT_SIMULATION = {
   clientIp: "192.168.1.45",
   timeOffsetSeconds: 0,
   fingerprintOverride: ""
 };
 
-// Initial logs - start completely empty for a clean slate
-const DEFAULT_AUDIT_LOGS = [];
+export function getSimulationState() {
+  const stored = localStorage.getItem("sat_simulation");
+  return stored ? JSON.parse(stored) : DEFAULT_SIMULATION;
+}
 
-export const QR_WINDOW_MS = 15000;
+export function saveSimulationState(simState) {
+  localStorage.setItem("sat_simulation", JSON.stringify(simState));
+}
 
-// Helper to load database from localStorage or set defaults
-export function loadDB() {
-  if (!localStorage.getItem("sat_db_initialized")) {
-    localStorage.setItem("sat_users", JSON.stringify(DEFAULT_USERS));
-    localStorage.setItem("sat_subjects", JSON.stringify(DEFAULT_SUBJECTS));
-    localStorage.setItem("sat_sessions", JSON.stringify([]));
-    localStorage.setItem("sat_attendance", JSON.stringify([]));
-    localStorage.setItem("sat_audit_logs", JSON.stringify(DEFAULT_AUDIT_LOGS));
-    localStorage.setItem("sat_simulation", JSON.stringify(DEFAULT_SIMULATION));
-    localStorage.setItem("sat_db_initialized", "true");
-  }
+// ------------------------------------------------------------------
+// SYSTEM FETCHERS
+// ------------------------------------------------------------------
 
-  return {
-    users: JSON.parse(localStorage.getItem("sat_users")),
-    subjects: JSON.parse(localStorage.getItem("sat_subjects")),
-    sessions: JSON.parse(localStorage.getItem("sat_sessions")),
-    attendance: JSON.parse(localStorage.getItem("sat_attendance")),
-    auditLogs: JSON.parse(localStorage.getItem("sat_audit_logs")),
-    simulation: JSON.parse(localStorage.getItem("sat_simulation"))
+export async function fetchUsers() {
+  const { data, error } = await supabase.from('users').select('*');
+  if (error) console.error("Error fetching users:", error);
+  return data || [];
+}
+
+export async function fetchSubjects() {
+  const { data, error } = await supabase.from('subjects').select('*');
+  if (error) console.error("Error fetching subjects:", error);
+  return data || [];
+}
+
+export async function fetchSessions() {
+  const { data, error } = await supabase.from('sessions').select('*');
+  if (error) console.error("Error fetching sessions:", error);
+  return data || [];
+}
+
+export async function fetchAttendance() {
+  const { data, error } = await supabase.from('attendance').select('*').order('timestamp', { ascending: false });
+  if (error) console.error("Error fetching attendance:", error);
+  return data || [];
+}
+
+export async function fetchAuditLogs() {
+  const { data, error } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(200);
+  if (error) console.error("Error fetching audit logs:", error);
+  return data || [];
+}
+
+// ------------------------------------------------------------------
+// AUDIT LOGS & UTILS
+// ------------------------------------------------------------------
+
+export async function writeAuditLog(level, message, details) {
+  const sim = getSimulationState();
+  const newLog = {
+    id: "log_" + crypto.randomUUID(),
+    timestamp: Date.now() + (sim.timeOffsetSeconds * 1000),
+    level,
+    message,
+    details
   };
+
+  await supabase.from('audit_logs').insert([newLog]);
+  return newLog;
 }
 
-export function saveDB(data) {
-  localStorage.setItem("sat_users", JSON.stringify(data.users));
-  localStorage.setItem("sat_subjects", JSON.stringify(data.subjects));
-  localStorage.setItem("sat_sessions", JSON.stringify(data.sessions));
-  localStorage.setItem("sat_attendance", JSON.stringify(data.attendance));
-  localStorage.setItem("sat_audit_logs", JSON.stringify(data.auditLogs));
-  localStorage.setItem("sat_simulation", JSON.stringify(data.simulation));
-}
-
-// Reset system tables completely
-export function resetSystemData() {
-  localStorage.removeItem("sat_db_initialized");
-  localStorage.removeItem("sat_users");
-  localStorage.removeItem("sat_subjects");
-  localStorage.removeItem("sat_sessions");
-  localStorage.removeItem("sat_attendance");
-  localStorage.removeItem("sat_audit_logs");
-  localStorage.removeItem("sat_simulation");
-  loadDB();
-  writeAuditLog("INFO", "Database Reset", "System database restored to clean defaults. All attendance logs and device registrations have been purged.");
-}
-
-// Generate device fingerprint based on browser metadata
 export function generateBrowserFingerprint() {
   const userAgent = navigator.userAgent;
   const screenWidth = window.screen.width;
@@ -78,45 +77,24 @@ export function generateBrowserFingerprint() {
   const language = navigator.language;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  // Create a clean hash-like representation from screen + browser settings
   const rawFingerprint = `${userAgent}-${screenWidth}x${screenHeight}-${language}-${timezone}`;
-
-  // Simple hash function to create a readable hex string
   let hash = 0;
   for (let i = 0; i < rawFingerprint.length; i++) {
     const char = rawFingerprint.charCodeAt(i);
     hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32bit integer
+    hash = hash & hash;
   }
   return "DEV_FP_" + Math.abs(hash).toString(16).toUpperCase();
 }
 
-// Write to Audit Log
-export function writeAuditLog(level, message, details) {
-  const db = loadDB();
-  const newLog = {
-    id: "log_" + Math.random().toString(36).substr(2, 9),
-    timestamp: Date.now() + (db.simulation.timeOffsetSeconds * 1000),
-    level,
-    message,
-    details
-  };
-  db.auditLogs.unshift(newLog); // Put new logs at top
-  // Keep logs at a reasonable limit
-  if (db.auditLogs.length > 200) db.auditLogs.pop();
-  saveDB(db);
-  return newLog;
-}
-
 // Generate Dynamic QR Payload
-// payload refreshed on a short rolling window
-export function generateQrPayload(sessionId) {
-  const db = loadDB();
-  const timeOffset = db.simulation.timeOffsetSeconds * 1000;
+export async function generateQrPayload(sessionId) {
+  const sim = getSimulationState();
+  const timeOffset = sim.timeOffsetSeconds * 1000;
   const currentTimestamp = Date.now() + timeOffset;
-  const session = db.sessions.find(s => s.id === sessionId);
+  
+  const { data: session } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
 
-  // Round timestamp down to the current rolling interval to stabilize the QR window
   const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
 
   const payload = {
@@ -127,181 +105,126 @@ export function generateQrPayload(sessionId) {
   };
 
   const jsonStr = JSON.stringify(payload);
-  // Encode base64 to simulate encrypted text payload
-  const encryptedPayload = btoa(jsonStr);
+  const encodedPayload = btoa(jsonStr);
 
   return {
-    token: encryptedPayload,
+    token: encodedPayload,
     expiresAt: windowTimestamp + QR_WINDOW_MS,
     timestamp: windowTimestamp
   };
 }
 
-// Student Registers Device Fingerprint
-export function registerStudentDevice(studentId, fingerprint) {
-  const db = loadDB();
-  const userIndex = db.users.findIndex(u => u.id === studentId);
-  if (userIndex === -1) return { success: false, message: "Student not found" };
+// ------------------------------------------------------------------
+// DEVICE BINDING
+// ------------------------------------------------------------------
 
-  db.users[userIndex].registeredFingerprint = fingerprint;
-  saveDB(db);
+export async function registerStudentDevice(studentId, fingerprint) {
+  const { data: user } = await supabase.from('users').select('name').eq('id', studentId).single();
+  if (!user) return { success: false, message: "Student not found" };
 
-  writeAuditLog(
-    "INFO",
-    `Device Binding Successful: ${db.users[userIndex].name}`,
-    `Fingerprint ${fingerprint} bound to student ID: ${studentId}`
-  );
+  const { error } = await supabase
+    .from('users')
+    .update({ registeredFingerprint: fingerprint })
+    .eq('id', studentId);
+
+  if (error) return { success: false, message: "Database update failed." };
+
+  await writeAuditLog("INFO", `Device Binding Successful: ${user.name}`, `Fingerprint ${fingerprint} bound to student ID: ${studentId}`);
   return { success: true, message: "Device bound successfully." };
 }
 
-// Admin Unbinds Device Fingerprint
-export function unbindStudentDevice(studentId) {
-  const db = loadDB();
-  const userIndex = db.users.findIndex(u => u.id === studentId);
-  if (userIndex === -1) return { success: false, message: "Student not found" };
+export async function unbindStudentDevice(studentId) {
+  const { data: user } = await supabase.from('users').select('name, registeredFingerprint').eq('id', studentId).single();
+  if (!user) return { success: false, message: "Student not found" };
 
-  const prevFp = db.users[userIndex].registeredFingerprint;
-  db.users[userIndex].registeredFingerprint = null;
-  saveDB(db);
+  const { error } = await supabase.from('users').update({ registeredFingerprint: null }).eq('id', studentId);
+  if (error) return { success: false, message: "Database update failed." };
 
-  writeAuditLog(
-    "WARN",
-    `Device Unbound by Admin: ${db.users[userIndex].name}`,
-    `Cleared fingerprint ${prevFp || "None"} from student ID: ${studentId}`
-  );
+  await writeAuditLog("WARN", `Device Unbound by Admin: ${user.name}`, `Cleared fingerprint from student ID: ${studentId}`);
   return { success: true, message: "Device unbound successfully." };
 }
 
-// Submit Attendance Scan
-export function verifyAndSubmitAttendance(studentId, token) {
-  const db = loadDB();
-  const timeOffset = db.simulation.timeOffsetSeconds * 1000;
-  const scanTime = Date.now() + timeOffset;
-  const student = db.users.find(u => u.id === studentId);
+// ------------------------------------------------------------------
+// CORE ATTENDANCE LOGIC
+// ------------------------------------------------------------------
 
-  if (!student) {
-    return { success: false, message: "Invalid Student ID" };
-  }
+export async function verifyAndSubmitAttendance(studentId, token) {
+  const sim = getSimulationState();
+  const scanTime = Date.now() + (sim.timeOffsetSeconds * 1000);
+  const clientFingerprint = sim.fingerprintOverride || generateBrowserFingerprint();
+  const clientIp = sim.clientIp;
 
-  // Get active client fingerprint (either real browser one or simulation override)
-  const clientFingerprint = db.simulation.fingerprintOverride || generateBrowserFingerprint();
-  const clientIp = db.simulation.clientIp;
+  // Fetch student
+  const { data: student } = await supabase.from('users').select('*').eq('id', studentId).single();
+  if (!student) return { success: false, message: "Invalid Student ID" };
 
-  // 1. Decode token
+  // Decode token
   let payload;
   try {
-    const decodedStr = atob(token);
-    payload = JSON.parse(decodedStr);
+    payload = JSON.parse(atob(token));
   } catch {
-    writeAuditLog(
-      "CRITICAL",
-      `Cheating Flagged: Invalid QR Payload from ${student.name}`,
-      `Token: "${token.substring(0, 20)}...". IP: ${clientIp}. Fingerprint: ${clientFingerprint}. Details: Base64 decode / JSON parse failed.`
-    );
-    return { success: false, message: "Invalid QR scan token format. (Cheating Flagged)" };
+    await writeAuditLog("CRITICAL", `Cheating Flagged: Invalid QR Payload`, `IP: ${clientIp}. Decode failed.`);
+    return { success: false, message: "Invalid QR scan token format." };
   }
 
-  payload = {
-    sessionId: payload.sessionId || payload.sid,
-    subjectId: payload.subjectId || payload.sub,
-    teacherId: payload.teacherId || payload.tid,
-    subjectName: payload.subjectName || payload.name,
-    subnet: payload.subnet || payload.net,
-    timestamp: payload.timestamp || payload.ts,
-    salt: payload.salt || payload.x
-  };
+  const sessionId = payload.sid || payload.sessionId;
+  const subjectId = payload.sub || payload.subjectId;
+  const tokenTimestamp = payload.ts || payload.timestamp;
 
-  let session = db.sessions.find(s => s.id === payload.sessionId);
+  // Fetch session & subject
+  const { data: session } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
   if (!session) {
-    if (!payload.subjectId) {
-      writeAuditLog(
-        "WARN",
-        `Scan Failed: Session Not Found for ${student.name}`,
-        `Requested Session ID: ${payload.sessionId}. IP: ${clientIp}.`
-      );
-      return { success: false, message: "Attendance session is no longer active or does not exist." };
-    }
-
-    session = {
-      id: payload.sessionId,
-      subjectId: payload.subjectId,
-      teacherId: payload.teacherId || "remote_teacher",
-      startedAt: payload.timestamp
-    };
+    return { success: false, message: "Attendance session is no longer active or does not exist." };
   }
 
-  const subject = db.subjects.find(s => s.id === session.subjectId) || {
-    id: payload.subjectId,
-    name: payload.subjectName || payload.subjectId,
-    subnet: payload.subnet || ""
-  };
+  const { data: subject } = await supabase.from('subjects').select('*').eq('id', session.subjectId).single();
 
-  // 2. Check Device Binding
+  // 1. Check Binding
   if (!student.registeredFingerprint) {
-    writeAuditLog(
-      "INFO",
-      `Scan Denied: Device Not Bound for ${student.name}`,
-      `Student attempted to scan before binding their device. IP: ${clientIp}. Fingerprint: ${clientFingerprint}`
-    );
-    return { success: false, message: "Device binding required. Please register your device fingerprint before scanning." };
+    await writeAuditLog("INFO", `Scan Denied: Device Not Bound`, `Attempt by ${student.name}`);
+    return { success: false, message: "Please register your device fingerprint before scanning." };
   }
 
   if (student.registeredFingerprint !== clientFingerprint) {
-    writeAuditLog(
-      "CRITICAL",
-      `Cheating Flagged: Unauthorized Device for ${student.name}`,
-      `Attempted scan using fingerprint ${clientFingerprint}, but user is bound to ${student.registeredFingerprint}. IP: ${clientIp}`
-    );
-    return { success: false, message: "Access Denied: Different device fingerprint detected (Cheating Flagged)." };
+    await writeAuditLog("CRITICAL", `Cheating Flagged: Unauthorized Device`, `Attempt by ${student.name}`);
+    return { success: false, message: "Access Denied: Different device fingerprint detected." };
   }
 
-  // 3. Check Dynamic QR Time-To-Live
-  // Allow a very generous buffer of 24 hours (86400000 ms) to completely eliminate clock drift issues when testing across separate devices
-  const tokenAge = scanTime - payload.timestamp;
-  if (tokenAge < -86400000 || tokenAge > 86400000) {
-    writeAuditLog(
-      "CRITICAL",
-      `Cheating Flagged: Expired QR Scan / Screenshot sharing by ${student.name}`,
-      `QR code age: ${(tokenAge / 1000).toFixed(1)}s (Allowed range: -24h to 24h). Token timestamp: ${payload.timestamp}, Scan timestamp: ${scanTime}. IP: ${clientIp}`
-    );
-    return { success: false, message: "Access Denied: Expired QR Code (Screenshot sharing or delayed scanning detected)." };
+  // 2. Check QR Age
+  const tokenAge = scanTime - tokenTimestamp;
+  if (tokenAge < -(QR_WINDOW_MS * 2) || tokenAge > QR_WINDOW_MS * 2) {
+    await writeAuditLog("CRITICAL", `Cheating Flagged: Expired QR`, `Attempt by ${student.name}`);
+    return { success: false, message: "Access Denied: Expired QR Code." };
   }
 
-  // 4. IP Subnet Verification
-  // Match check. Expected: e.g., '192.168.1.*'
-  const expectedSubnet = subject.subnet;
-  let ipMatches = true;
-
-  if (expectedSubnet) {
-    const subnetPrefix = expectedSubnet.replace("*", ""); // '192.168.1.'
+  // 3. Check Subnet
+  if (subject?.subnet) {
+    const subnetPrefix = subject.subnet.replace("*", "");
     if (!clientIp.startsWith(subnetPrefix)) {
-      ipMatches = false;
+      await writeAuditLog("CRITICAL", `Cheating Flagged: Subnet Mismatch`, `IP ${clientIp} not in ${subject.subnet}`);
+      return { success: false, message: "Access Denied: Classroom Network Mismatch." };
     }
   }
 
-  if (!ipMatches) {
-    writeAuditLog(
-      "CRITICAL",
-      `Cheating Flagged: Location Subnet Mismatch for ${student.name}`,
-      `Scanned from IP ${clientIp}, but classroom subnet requires ${expectedSubnet}. VPN or proxy suspected.`
-    );
-    return { success: false, message: "Access Denied: Classroom Network Mismatch. Please connect to the class Wi-Fi." };
-  }
+  // 4. Check if already marked
+  const { data: existing } = await supabase.from('attendance')
+    .select('id')
+    .eq('studentId', studentId)
+    .eq('sessionId', sessionId)
+    .single();
 
-  // 5. Double-scanning protection (already marked present in this session)
-  const alreadyMarked = db.attendance.find(a => a.studentId === studentId && a.sessionId === session.id);
-  if (alreadyMarked) {
+  if (existing) {
     return { success: true, message: "Already marked present for this session.", alreadyDone: true };
   }
 
-  // If all checks pass, write attendance record!
+  // Insert Attendance
   const newAttendance = {
-    id: "att_" + Math.random().toString(36).substr(2, 9),
+    id: "att_" + crypto.randomUUID(),
     studentId,
     studentName: student.name,
     sessionId: session.id,
-    subjectId: subject.id,
-    subjectName: subject.name,
+    subjectId: subject?.id || subjectId,
+    subjectName: subject?.name || subjectId,
     timestamp: scanTime,
     status: "Present",
     ipAddress: clientIp,
@@ -309,116 +232,105 @@ export function verifyAndSubmitAttendance(studentId, token) {
     method: "Dynamic QR Verified"
   };
 
-  db.attendance.push(newAttendance);
-  saveDB(db);
+  await supabase.from('attendance').insert([newAttendance]);
+  await writeAuditLog("INFO", `Attendance Marked: ${student.name}`, `Method: Dynamic QR. IP: ${clientIp}.`);
 
-  writeAuditLog(
-    "INFO",
-    `Attendance Marked: ${student.name} - ${subject.name}`,
-    `Status: Present. Method: Dynamic QR. IP: ${clientIp}. Fingerprint: ${clientFingerprint}. TTL drift: ${tokenAge}ms.`
-  );
-
-  return { success: true, message: `Attendance marked successfully for ${subject.name}!` };
+  return { success: true, message: `Attendance marked successfully!` };
 }
 
-// Teacher Manual Override
-export function submitManualOverride(studentId, sessionId, status) {
-  const db = loadDB();
-  const student = db.users.find(u => u.id === studentId);
-  const session = db.sessions.find(s => s.id === sessionId);
-  const subject = db.subjects.find(s => s.id === session.subjectId);
+// ------------------------------------------------------------------
+// TEACHER CONTROLS
+// ------------------------------------------------------------------
 
-  const existingIndex = db.attendance.findIndex(a => a.studentId === studentId && a.sessionId === sessionId);
+export async function submitManualOverride(studentId, sessionId, status) {
+  const sim = getSimulationState();
+  const { data: student } = await supabase.from('users').select('*').eq('id', studentId).single();
+  const { data: session } = await supabase.from('sessions').select('*').eq('id', sessionId).single();
+  if (!student || !session) return { success: false, message: "Student or session not found." };
 
-  if (existingIndex !== -1) {
-    const prevStatus = db.attendance[existingIndex].status;
+  const { data: subject } = await supabase.from('subjects').select('*').eq('id', session.subjectId).single();
+
+  const { data: existing } = await supabase.from('attendance')
+    .select('*')
+    .eq('studentId', studentId)
+    .eq('sessionId', sessionId)
+    .single();
+
+  if (existing) {
     if (status === "Absent") {
-      db.attendance.splice(existingIndex, 1); // Delete record for Absent
+      const { error } = await supabase.from('attendance').delete().eq('id', existing.id);
+      if (error) return { success: false, message: "Failed to delete attendance record." };
     } else {
-      db.attendance[existingIndex].status = status;
-      db.attendance[existingIndex].method = "Teacher Manual Override";
+      const { error } = await supabase.from('attendance').update({ status, method: "Teacher Manual Override" }).eq('id', existing.id);
+      if (error) return { success: false, message: "Failed to update attendance record." };
     }
-    writeAuditLog(
-      "WARN",
-      `Attendance Override: ${student.name}`,
-      `Changed status from '${prevStatus}' to '${status}' in session ${sessionId} (${subject.name}).`
-    );
   } else if (status !== "Absent") {
-    const timeOffset = db.simulation.timeOffsetSeconds * 1000;
     const newRecord = {
-      id: "att_" + Math.random().toString(36).substr(2, 9),
+      id: "att_" + crypto.randomUUID(),
       studentId,
       studentName: student.name,
       sessionId: session.id,
-      subjectId: subject.id,
-      subjectName: subject.name,
-      timestamp: Date.now() + timeOffset,
+      subjectId: subject?.id || session.subjectId,
+      subjectName: subject?.name || session.subjectId,
+      timestamp: Date.now() + (sim.timeOffsetSeconds * 1000),
       status: status,
       ipAddress: "Manual",
       fingerprint: "Manual",
       method: "Teacher Manual Override"
     };
-    db.attendance.push(newRecord);
-    writeAuditLog(
-      "WARN",
-      `Attendance Override: ${student.name}`,
-      `Manually marked as '${status}' in session ${sessionId} (${subject.name}) by teacher.`
-    );
+    const { error } = await supabase.from('attendance').insert([newRecord]);
+    if (error) return { success: false, message: "Failed to insert attendance record." };
   }
 
-  saveDB(db);
+  await writeAuditLog("WARN", `Attendance Override: ${student.name}`, `Manually marked as '${status}' in session ${sessionId}.`);
   return { success: true };
 }
 
-// Create new class session
-export function startTeacherSession(teacherId, subjectId) {
-  const db = loadDB();
-  const subject = db.subjects.find(s => s.id === subjectId);
-  if (!subject) return { success: false, message: "Subject not found" };
+export async function startTeacherSession(teacherId, subjectId) {
+  const sim = getSimulationState();
+  
+  // Optionally clean up old sessions for this teacher here
+  // await supabase.from('sessions').delete().eq('teacherId', teacherId);
 
-  // End any currently running sessions for this teacher
-  db.sessions = db.sessions.filter(s => {
-    const sub = db.subjects.find(x => x.id === s.subjectId);
-    return !sub || sub.teacherId !== teacherId;
-  });
-
-  const timeOffset = db.simulation.timeOffsetSeconds * 1000;
   const newSession = {
-    id: "sess_" + Math.random().toString(36).substr(2, 9),
+    id: "sess_" + crypto.randomUUID(),
     subjectId,
     teacherId,
-    createdAt: Date.now() + timeOffset
+    createdAt: Date.now() + (sim.timeOffsetSeconds * 1000)
   };
 
-  db.sessions.push(newSession);
-  saveDB(db);
+  const { error } = await supabase.from('sessions').insert([newSession]);
+  if (error) return { success: false, message: "Failed to start session." };
 
-  writeAuditLog(
-    "INFO",
-    `Attendance Session Started: ${subject.name}`,
-    `Session ID: ${newSession.id}. Subject Subnet Constraint: ${subject.subnet}.`
-  );
-
+  await writeAuditLog("INFO", `Attendance Session Started`, `Session ID: ${newSession.id}`);
   return { success: true, session: newSession };
 }
 
-// End class session
-export function endTeacherSession(sessionId) {
-  const db = loadDB();
-  const index = db.sessions.findIndex(s => s.id === sessionId);
-  if (index === -1) return { success: false };
+export async function endTeacherSession(sessionId) {
+  const { error } = await supabase.from('sessions').delete().eq('id', sessionId);
+  if (error) return { success: false, message: "Failed to end session." };
+  await writeAuditLog("INFO", `Attendance Session Closed`, `Session ID: ${sessionId} closed.`);
+  return { success: true };
+}
 
-  const session = db.sessions[index];
-  const subject = db.subjects.find(x => x.id === session.subjectId);
+// ------------------------------------------------------------------
+// GLOBAL RESET
+// ------------------------------------------------------------------
 
-  db.sessions.splice(index, 1);
-  saveDB(db);
+export async function resetSystemData() {
+  const results = await Promise.all([
+    supabase.from('attendance').delete().neq('id', '0'),
+    supabase.from('sessions').delete().neq('id', '0'),
+    supabase.from('audit_logs').delete().neq('id', '0'),
+    supabase.from('users').update({ registeredFingerprint: null }).neq('id', '0')
+  ]);
 
-  writeAuditLog(
-    "INFO",
-    `Attendance Session Closed: ${subject ? subject.name : "Unknown Subject"}`,
-    `Session ID: ${sessionId} has been closed and QR codes invalidated.`
-  );
+  const errors = results.filter(r => r.error);
+  if (errors.length > 0) {
+    console.error("Reset errors:", errors.map(e => e.error));
+    return { success: false, message: "Some database operations failed during reset." };
+  }
 
+  await writeAuditLog("INFO", "Database Reset", "System database wiped via Admin command.");
   return { success: true };
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { loadDB, saveDB, generateBrowserFingerprint, QR_WINDOW_MS } from "../state/db";
+import { getSimulationState, saveSimulationState, generateBrowserFingerprint, QR_WINDOW_MS } from "../state/db";
 import { Terminal, Shield, Cpu, RefreshCw, X, Radio } from "lucide-react";
 
 export default function SimulationPanel({ onUpdate }) {
@@ -12,42 +12,29 @@ export default function SimulationPanel({ onUpdate }) {
   const [activeSessionToken, setActiveSessionToken] = useState("");
 
   useEffect(() => {
-    // Poll the active session token for diagnostic display
     const interval = setInterval(() => {
-      const db = loadDB();
-      if (db.sessions.length > 0) {
-        // If there's an active session, simulate the token being copied or fetched
-        // We'll search for the active session and see if a token exists in cache
-        const activeSess = [...db.sessions].sort((a, b) => {
-          const aTime = a.createdAt ?? a.startedAt ?? 0;
-          const bTime = b.createdAt ?? b.startedAt ?? 0;
-          return bTime - aTime;
-        })[0];
-        // Generate a token for diagnostic preview
-        const timeOffsetMs = db.simulation.timeOffsetSeconds * 1000;
-        const currentTimestamp = Date.now() + timeOffsetMs;
-        const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
-        const payload = {
-          sessionId: activeSess.id,
-          timestamp: windowTimestamp,
-          salt: "diag"
-        };
-        setActiveSessionToken(btoa(JSON.stringify(payload)));
-      } else {
-        setActiveSessionToken("");
-      }
+      const sim = getSimulationState();
+      const timeOffsetMs = (sim.timeOffsetSeconds || 0) * 1000;
+      const currentTimestamp = Date.now() + timeOffsetMs;
+      const windowTimestamp = Math.floor(currentTimestamp / QR_WINDOW_MS) * QR_WINDOW_MS;
+      const payload = {
+        sid: "diag",
+        ts: windowTimestamp,
+        x: "diag"
+      };
+      setActiveSessionToken(btoa(JSON.stringify(payload)));
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // Update localStorage when local states change
   const applySettings = (newIp, newOffset, newSpoof, newCustomFp) => {
-    const db = loadDB();
-    db.simulation.clientIp = newIp;
-    db.simulation.timeOffsetSeconds = parseInt(newOffset);
-    db.simulation.fingerprintOverride = newSpoof ? newCustomFp : "";
-    saveDB(db);
+    const sim = {
+      clientIp: newIp,
+      timeOffsetSeconds: parseInt(newOffset) || 0,
+      fingerprintOverride: newSpoof ? newCustomFp : ""
+    };
+    saveSimulationState(sim);
     if (onUpdate) onUpdate();
   };
 
@@ -279,9 +266,7 @@ export default function SimulationPanel({ onUpdate }) {
           </div>
           <button
             onClick={() => {
-              const db = loadDB();
-              db.simulation = { clientIp: "192.168.1.45", timeOffsetSeconds: 0, fingerprintOverride: "" };
-              saveDB(db);
+              saveSimulationState({ clientIp: "192.168.1.45", timeOffsetSeconds: 0, fingerprintOverride: "" });
               setClientIp("192.168.1.45");
               setTimeOffset(0);
               setSpoofFingerprint(false);

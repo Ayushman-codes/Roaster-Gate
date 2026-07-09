@@ -2,18 +2,24 @@ import { useState, useEffect, useRef } from "react";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 import {
-  loadDB,
+  fetchUsers, fetchSessions, fetchSubjects, fetchAttendance,
+  getSimulationState,
   generateBrowserFingerprint,
   registerStudentDevice,
   verifyAndSubmitAttendance
 } from "../state/db";
-import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, UserCheck } from "lucide-react";
+import { Laptop, ScanLine, Clock, MapPin, History, CheckCircle2, AlertTriangle, User, Calendar, UserCheck, Loader2 } from "lucide-react";
 
-export default function StudentDashboard({ user, onTriggerRefresh }) {
+export default function StudentDashboard({ user, onTriggerRefresh, triggerRefresh }) {
+  const [data, setData] = useState({ users: [], sessions: [], subjects: [], attendance: [] });
+  const [simState, setSimState] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const scannerControlsRef = useRef(null);
   const scannerStatusAtRef = useRef(0);
+  
   const [manualToken, setManualToken] = useState("");
   const [scanResult, setScanResult] = useState(null);
   const [isCameraScanning, setIsCameraScanning] = useState(false);
@@ -25,19 +31,33 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
   const [isDeviceLoaded, setIsDeviceLoaded] = useState(false);
   const [isHistoryLoaded, setIsHistoryLoaded] = useState(false);
 
-  const db = loadDB();
-  const currentUser = db.users.find(u => u.id === user.id) ?? user;
-  const clientFingerprint = db.simulation.fingerprintOverride || generateBrowserFingerprint();
-  const activeSessionBase = db.sessions.length > 0
-    ? [...db.sessions].sort((a, b) => {
+  useEffect(() => {
+    async function loadAllData() {
+      setIsLoading(true);
+      const [u, se, su, a] = await Promise.all([
+        fetchUsers(), fetchSessions(), fetchSubjects(), fetchAttendance()
+      ]);
+      setData({ users: u, sessions: se, subjects: su, attendance: a });
+      setSimState(getSimulationState());
+      setIsLoading(false);
+    }
+    loadAllData();
+  }, [triggerRefresh]);
+
+  const currentUser = data.users.find(u => u.id === user.id) ?? user;
+  const clientFingerprint = simState?.fingerprintOverride || generateBrowserFingerprint();
+  
+  const activeSessionBase = data.sessions.length > 0
+    ? [...data.sessions].sort((a, b) => {
       const aTime = a.createdAt ?? a.startedAt ?? 0;
       const bTime = b.createdAt ?? b.startedAt ?? 0;
       return bTime - aTime;
     })[0]
     : null;
+    
   const activeSession = activeSessionBase
     ? (() => {
-      const subject = db.subjects.find(s => s.id === activeSessionBase.subjectId);
+      const subject = data.subjects.find(s => s.id === activeSessionBase.subjectId);
       return {
         ...activeSessionBase,
         subjectName: subject ? subject.name : "Unknown",
@@ -46,12 +66,13 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
       };
     })()
     : null;
-  const attendanceHistory = db.attendance
+
+  const attendanceHistory = data.attendance
     .filter(a => a.studentId === user.id)
     .sort((a, b) => b.timestamp - a.timestamp);
 
-  const handleRegisterDevice = () => {
-    const res = registerStudentDevice(currentUser.id, clientFingerprint);
+  const handleRegisterDevice = async () => {
+    const res = await registerStudentDevice(currentUser.id, clientFingerprint);
     if (res.success) {
       onTriggerRefresh();
     } else {
@@ -59,13 +80,13 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
     }
   };
 
-  const handleScanSubmit = (tokenToScan) => {
+  const handleScanSubmit = async (tokenToScan) => {
     if (!tokenToScan) {
       alert("No token payload found to scan.");
       return;
     }
 
-    const result = verifyAndSubmitAttendance(currentUser.id, tokenToScan);
+    const result = await verifyAndSubmitAttendance(currentUser.id, tokenToScan);
     setScanResult({
       success: result.success,
       message: result.message
@@ -193,6 +214,14 @@ export default function StudentDashboard({ user, onTriggerRefresh }) {
       }
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="w-full flex justify-center py-20">
+        <Loader2 className="h-8 w-8 text-emerald-500 animate-spin" />
+      </div>
+    );
+  }
 
   const isDeviceBound = !!currentUser.registeredFingerprint;
   const isFingerprintMatch = currentUser.registeredFingerprint === clientFingerprint;
