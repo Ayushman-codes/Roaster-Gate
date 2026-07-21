@@ -1,5 +1,6 @@
 import { useState } from "react";
 import Login from "./components/Login";
+import ForgotPassword from "./components/ForgotPassword";
 import StudentDashboard from "./components/StudentDashboard";
 import TeacherDashboard from "./components/TeacherDashboard";
 import AdminDashboard from "./components/AdminDashboard";
@@ -9,6 +10,7 @@ import { LogOut } from "lucide-react";
 export default function App() {
   const [user, setUser] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [view, setView] = useState("login"); // login | forgotPassword
 
   const triggerRefresh = () => {
     setRefreshKey(prev => prev + 1);
@@ -16,6 +18,7 @@ export default function App() {
 
   const handleLogout = () => {
     setUser(null);
+    setView("login");
   };
 
   return (
@@ -53,7 +56,11 @@ export default function App() {
       {/* Main Content Area */}
       <main className="px-4 pb-20">
         {!user ? (
-          <Login onLogin={setUser} triggerRefresh={refreshKey} />
+          view === "forgotPassword" ? (
+            <ForgotPassword onBack={() => setView("login")} />
+          ) : (
+            <Login onLogin={setUser} triggerRefresh={refreshKey} onForgotPassword={() => setView("forgotPassword")} />
+          )
         ) : (
           <div className="py-6 animate-fade-in">
             {user.role === "student" && <StudentDashboard user={user} onTriggerRefresh={triggerRefresh} triggerRefresh={refreshKey} />}

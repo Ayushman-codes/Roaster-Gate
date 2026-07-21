@@ -462,3 +462,73 @@ export async function resetSystemData() {
   await writeAuditLog("INFO", "Database Reset", "System database wiped via Admin command.");
   return { success: true };
 }
+
+// ------------------------------------------------------------------
+// PASSWORD RESET
+// ------------------------------------------------------------------
+
+export async function sendResetCode(email) {
+  const { data: user } = await supabase.from('users').select('id, email').eq('email', email).single();
+  if (!user) {
+    return { success: false, message: "No account found with that email address." };
+  }
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+
+  await supabase.from('password_resets').delete().eq('email', email);
+
+  const { error } = await supabase.from('password_resets').insert([{
+    email,
+    code,
+    expires_at: expiresAt,
+    used: false
+  }]);
+
+  if (error) {
+    console.error("Error creating reset code:", error);
+    return { success: false, message: "Failed to generate reset code. Please try again." };
+  }
+
+  return { success: true, code };
+}
+
+export async function verifyResetCode(email, code) {
+  const { data: record, error: fetchError } = await supabase
+    .from('password_resets')
+    .select('*')
+    .eq('email', email)
+    .eq('code', code)
+    .eq('used', false)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fetchError || !record) {
+    return { success: false, message: "Invalid reset code." };
+  }
+
+  if (Date.now() > record.expires_at) {
+    return { success: false, message: "Reset code has expired. Please request a new one." };
+  }
+
+  const { data: user } = await supabase.from('users').select('id').eq('email', email).single();
+  if (!user) {
+    return { success: false, message: "User not found." };
+  }
+
+  await supabase.from('password_resets').update({ used: true }).eq('id', record.id);
+
+  return { success: true, userId: user.id };
+}
+
+export async function updatePassword(userId, newPassword) {
+  const { error } = await supabase.from('users').update({ password: newPassword }).eq('id', userId);
+  if (error) {
+    console.error("Error updating password:", error);
+    return { success: false, message: "Failed to update password. Please try again." };
+  }
+
+  await writeAuditLog("INFO", "Password Reset", `Password updated for user ID: ${userId}`);
+  return { success: true };
+}

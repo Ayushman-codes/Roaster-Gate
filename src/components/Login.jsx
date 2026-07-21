@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { fetchUsers } from "../state/db";
 import { ShieldAlert, Key, Mail, Lock, Loader2 } from "lucide-react";
 
-export default function Login({ onLogin, triggerRefresh }) {
+export default function Login({ onLogin, triggerRefresh, onForgotPassword }) {
   const [users, setUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -103,7 +103,7 @@ export default function Login({ onLogin, triggerRefresh }) {
             </div>
           </div>
 
-          <div className="space-y-1.5">
+              <div className="space-y-1.5">
             <label htmlFor="password" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
               Password
             </label>
@@ -119,6 +119,15 @@ export default function Login({ onLogin, triggerRefresh }) {
                 placeholder="Enter your password"
                 className="w-full pl-10 pr-3 py-2.5 bg-white/45 border border-white/60 dark:bg-white/5 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:border-emerald-500"
               />
+            </div>
+            <div className="text-right">
+              <button
+                type="button"
+                onClick={onForgotPassword}
+                className="text-xs text-[#0e5b9e] dark:text-emerald-400 hover:underline cursor-pointer"
+              >
+                Forgot Password?
+              </button>
             </div>
           </div>
 
