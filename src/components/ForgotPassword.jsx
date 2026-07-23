@@ -39,7 +39,7 @@ export default function ForgotPassword({ onBack }) {
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
         {
-          to_email: email,
+          email: email,
           reset_code: result.code,
           app_name: "SecureAttendance",
         },
