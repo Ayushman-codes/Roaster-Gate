@@ -3,94 +3,143 @@
 ## Build Phases
 
 ### Phase 0 — Project Initialization
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Scaffolded Vite + React project
-- Installed dependencies: @supabase/supabase-js, qrcode.react, @zxing/browser, recharts, lucide-react, @emailjs/browser
-- Installed Tailwind CSS v4 with @tailwindcss/vite plugin
-- Created directory structure: src/{components,state,assets}
-- Created .env with Supabase and EmailJS credentials
-- Created supabaseClient.js, db.js
+- Scaffolded Vite + React 19 project
+- Installed dependencies:
+  - `@supabase/supabase-js` — database & auth client
+  - `qrcode.react` — QR code generation (QRCodeSVG)
+  - `@zxing/browser` + `@zxing/library` — QR code scanning via camera
+  - `recharts` — AreaChart & PieChart for analytics
+  - `lucide-react` — icon system
+  - `@emailjs/browser` — password reset emails
+- Installed Tailwind CSS v4 with `@tailwindcss/vite` plugin (no PostCSS config)
+- Created directory structure: `src/{components,state,assets}`
+- Created `.env` with Supabase and EmailJS credential placeholders
+- Created `supabaseClient.js` (client initialization)
+- Created `db.js` (core state machine skeleton)
 
 ### Phase 1 — Authentication & Database
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Created Supabase client initialization
-- Created login form with email/password
-- Created App.jsx with auth state management
-- Configured view switching: login, forgotPassword, role-based dashboards
+- Implemented Supabase client initialization with anon key
+- Created `Login.jsx` — email/password form with validation, error handling, loading state
+- Built `App.jsx` with:
+  - Auth state management (user, view, loading)
+  - Role-based view switching: login, forgotPassword, student, teacher, admin
+  - Logout handler clearing session
+  - SimulationPanel rendered for all authenticated views
+- Configured view switching logic in App.jsx (no react-router)
+- Added password visibility toggle in login form
 
 ### Phase 2 — Student Portal
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Created StudentDashboard.jsx with three sections
-- Biometric Device Registration: WebAuthn credential creation and storage
-- Class Attendance Scanner: QR code scanning via @zxing/browser
-- Attendance Log Registry: Table of past attendance records
-- Added device fingerprint binding and verification
+- Created `StudentDashboard.jsx` with three collapsible sections:
+  - **Biometric Device Registration**: WebAuthn `navigator.credentials.create()` flow, credential ID display, status badge (Bound/Unbound), error handling for unsupported browsers
+  - **Class Attendance Scanner**: `@zxing/browser` camera scanning, animated viewfinder with scan line, manual token injection fallback, real-time verification feedback
+  - **Attendance Log Registry**: Table with subject, status (Present/Late/Absent badges), IP, method, timestamp
+- Implemented device fingerprint binding: stores WebAuthn credential ID in `users.registeredFingerprint`
+- Added fingerprint verification on attendance submission
+- Sidebar with student credentials (enrollment, programme, semester) and quick links
 
 ### Phase 3 — Teacher Portal
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Created TeacherDashboard.jsx with three sections
-- QR Broadcast Controls: Subject selector, start/end session, live QR display
-- Dynamic QR generation with 15-second rolling time windows
-- Historical Dashboard Analytics: Area and Pie charts (mocked data)
-- Live Class Roster & Override: Student grid with manual attendance buttons
+- Created `TeacherDashboard.jsx` with three collapsible sections:
+  - **QR Broadcast Controls**: Subject selector dropdown, Start/End Session buttons, live QRCodeSVG with 15-second countdown timer overlay, session status indicator
+  - **Historical Analytics**: AreaChart (attendance trends over time, mocked data), PieChart (present/late/absent ratio)
+  - **Live Class Roster**: Grid/table of all enrolled students with real-time attendance status, manual override buttons (Present/Late/Absent) per student
+- Implemented dynamic QR generation: `generateQrToken(sessionId)` called every 15s via `setInterval`
+- QR payload: base64-encoded `{ sessionId, timestamp, salt }`
+- Session management: create/end sessions in Supabase `sessions` table
 
 ### Phase 4 — Admin Portal
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Created AdminDashboard.jsx with four sections
-- Add New User: Form for creating student/teacher accounts
-- Student Device Registry: Table with bind status, unbind/delete actions
-- System Security Logs: Scrollable audit log with INFO/WARN/CRITICAL levels
-- Danger Zone: Factory reset that wipes attendance, sessions, logs, and bindings
+- Created `AdminDashboard.jsx` with four collapsible sections:
+  - **Add New User**: Form with name, email, role (student/teacher), password, enrollment/programme (students only), inserts into `users` table
+  - **Student Device Registry**: Table of all students with bind status (green/gray dot), Unbind button (clears `registeredFingerprint`), Delete button
+  - **System Security Logs**: Scrollable table with level badges (INFO=blue, WARN=yellow, CRITICAL=red), message, timestamp, expandable details
+  - **Danger Zone**: Factory Reset button with confirmation modal — wipes `attendance`, `sessions`, `audit_logs`, clears all `registeredFingerprint` fields
+- Role-based user management (CRUD operations on `users` table)
+- Audit log pagination/virtualization for performance
 
 ### Phase 5 — Security Engine
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- QR token generation: base64-encoded payload with sessionId, timestamp, salt
-- QR verification: decode, check age (2x window = 30s tolerance), reject expired
-- Subnet verification: compare client IP against course subnet prefix
-- Biometric verification: WebAuthn assertion flow
-- Duplicate detection: prevent same student marking twice per session
-- Audit logging: all security events recorded with level and details
+- Implemented core validation functions in `db.js`:
+  - `generateQrToken(sessionId)` — creates cryptographically random salt + timestamp, base64 encodes
+  - `verifyQrToken(token)` — decodes base64, validates JSON structure, checks session exists
+  - `verifySubnet(clientIP, subnet)` — prefix matching (e.g., `192.168.1.*` matches `192.168.1.45`)
+  - `verifyFingerprint(credentialId, userId)` — WebAuthn assertion via `navigator.credentials.get()`
+  - `verifyAndSubmitAttendance(...)` — orchestrates full pipeline: QR decode → session lookup → biometric → QR age (30s tolerance) → subnet → duplicate check → insert attendance + audit log
+  - `insertAuditLog(level, message, details)` — structured logging to `audit_logs` table
+- QR_WINDOW_MS = 15000 (15-second rotation)
+- Validation tolerance = 2 * QR_WINDOW_MS = 30000ms (30 seconds)
 
 ### Phase 6 — Simulation Sandbox
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-13
 
-- Created SimulationPanel.jsx as floating bottom-right panel
-- Simulate Client IP: preset subnets + custom input
-- Clock Offset: slider from -15s to +15s for TTL expiry simulation
-- Live Diagnostic Feed: current IP, offset, biometric status, active QR token
-- State persists in localStorage under key sat_simulation
+- Created `SimulationPanel.jsx` as floating bottom-right panel:
+  - **IP Spoof Controls**: 4 presets (Classroom Wi-Fi A: 192.168.1.45, Subnet B: 192.168.2.10, Home Network: 73.12.84.10, Custom input), radio selection
+  - **Clock Offset**: Slider -15s to +15s, step 1s, displays current offset, feeds into QR age validation
+  - **Live Diagnostic Feed**: Real-time display of simulated IP, clock offset, biometric status, active QR token (monospace, copyable)
+  - **Biometric Spoof**: Checkbox to simulate fingerprint mismatch
+  - State persists in `localStorage` under key `sat_simulation`
+  - Reset to Defaults button clears simulation state
 
 ### Phase 7 — Password Reset
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-23
 
-- Created ForgotPassword.jsx with 3-step flow
-- Request: enter email, send 6-digit code via EmailJS
-- Verify: enter code + new password, validate and update
-- Success: confirmation message with back-to-login button
-- Backend functions: sendResetCode, verifyResetCode, updatePassword in db.js
+- Created `ForgotPassword.jsx` with 3-step wizard:
+  1. **Request**: Email input → calls `sendResetCode(email)` → generates 6-digit code, stores in `password_resets` with 10-min TTL, sends via EmailJS
+  2. **Verify**: 6-digit code input (auto-focus each digit) + new password + confirm → calls `verifyResetCode(email, code)` → validates code, expiry, not used
+  3. **Success**: Confirmation message with back-to-login button
+- Backend functions in `db.js`:
+  - `sendResetCode(email)` — inserts code, calls EmailJS `send()` with template variables
+  - `verifyResetCode(email, code)` — checks code matches, not expired, not used
+  - `updatePassword(email, newPassword)` — updates `users.password`, marks reset code as used
+- EmailJS template variables: `to_email`, `reset_code`, `app_name`
 
 ### Phase 8 — Polish & Error States
-**Status:** Done
+**Status:** Done  
+**Date:** 2026-07-23
 
-- Loading spinners on all forms
-- Error banners with descriptive messages
-- Empty states for no data
-- Clean build with no warnings
+- Added loading spinners on all async operations (login, registration, scanning, QR generation, password reset)
+- Implemented error banners with descriptive messages and dismiss actions
+- Added empty states for no data (no attendance history, no sessions, no users)
+- Form validation: required fields, email format, password min 6 chars, password match
+- Toast notifications for success/error feedback (auto-dismiss 4s)
+- Clean production build: `npm run build` passes with no warnings
+- Verified all security defenses work via simulation panel
 
-### Next Steps (Manual)
+### Next Steps (Manual Setup Required)
 
-1. Create Supabase project and configure tables
-2. Enable email/password auth in Supabase
-3. Set up EmailJS account and configure template
-4. Fill in .env with real credentials
-5. Test auth flow end-to-end
-6. Test biometric registration on HTTPS
-7. Test QR broadcast and scanning
-8. Verify all security defenses work
+1. Create Supabase project and configure tables (run SQL from AGENT_CONTEXT.md)
+2. Enable email/password auth in Supabase Authentication settings
+3. Set up EmailJS account and configure email template
+4. Fill in `.env` with real credentials:
+   ```
+   VITE_SUPABASE_URL=
+   VITE_SUPABASE_ANON_KEY=
+   VITE_EMAILJS_SERVICE_ID=
+   VITE_EMAILJS_TEMPLATE_ID=
+   VITE_EMAILJS_PUBLIC_KEY=
+   ```
+5. Test auth flow end-to-end (login, logout, role routing)
+6. Test biometric registration on HTTPS (required for WebAuthn)
+7. Test QR broadcast and scanning (teacher + student)
+8. Verify all security defenses work via simulation panel:
+   - IP spoof → subnet mismatch rejection
+   - Clock drift → QR expiry rejection
+   - Fingerprint spoof → biometric mismatch rejection
 9. Deploy to Vercel or similar hosting

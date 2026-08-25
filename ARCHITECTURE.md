@@ -109,3 +109,32 @@ App.jsx
 - **Audit Logging**: All security events recorded with severity level
 - **No RLS**: All queries are client-side, no Row Level Security enforced
 - **Plaintext Passwords**: Known limitation for academic demo scope
+
+### Key Implementation Details
+
+#### db.js — Core State Machine
+- `getClientIP()` — fetches public IP via ipify API, falls back to simulated IP
+- `generateQrToken(sessionId)` — creates base64 payload with timestamp + salt
+- `verifyQrToken(token)` — decodes and validates age, session existence
+- `verifySubnet(clientIP, subnet)` — prefix match (e.g., 192.168.1.* matches 192.168.1.45)
+- `verifyFingerprint(credentialId, userId)` — WebAuthn assertion verification
+- `verifyAndSubmitAttendance(...)` — orchestrates full validation pipeline
+- `getAuditLogs()` / `insertAuditLog(...)` — security event logging
+- `factoryReset()` — wipes attendance, sessions, logs, clears bindings
+
+#### SimulationPanel.jsx — Attack Sandbox
+- IP presets: Classroom Wi-Fi A (192.168.1.45), Subnet B (192.168.2.10), Home (73.12.84.10), Custom
+- Clock offset: -15s to +15s slider, persisted in localStorage (sat_simulation)
+- Live diagnostic feed shows: current IP, clock offset, biometric status, active QR token
+
+#### QR Code Generation
+- Payload: `{ sessionId, timestamp: Date.now(), salt: randomBase64() }`
+- Encoded as base64 string
+- Rotates every 15 seconds (QR_WINDOW_MS = 15000)
+- Rendered via QRCodeSVG from qrcode.react
+
+#### WebAuthn Biometric Flow
+1. Registration: `navigator.credentials.create({ publicKey: options })` → store credential ID
+2. Authentication: `navigator.credentials.get({ publicKey: options })` → verify assertion
+3. Credential ID stored in `users.registeredFingerprint`
+4. Simulation panel can spoof fingerprint for testing

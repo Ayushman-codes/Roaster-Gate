@@ -10,8 +10,8 @@
 
 **Name:** Roster-Gate (Secure Attendance Tracking System)
 **What it is:** A React web app that prevents attendance fraud in university classrooms
-by implementing multi-layered security verification: dynamic QR codes with TTL,
-hardware-bound device fingerprinting (WebAuthn), and WiFi subnet whitelisting.
+by implementing multi-layered security verification: dynamic QR codes with 15-second TTL
+(30s tolerance), hardware-bound device fingerprinting (WebAuthn), and WiFi subnet whitelisting.
 Includes a simulation sandbox for live security demos.
 
 **Scope:** Three user roles (Student, Teacher, Admin). Single-user-per-device model.
@@ -20,7 +20,7 @@ over exhaustive edge-case handling.
 
 **Non-goals (do not build unless explicitly asked):** real-time multi-user collaboration,
 video recording, calendar integration, custom backend server, production-grade password
-hashing, mobile native app.
+hashing, mobile native app, Row Level Security policies.
 
 ## 2. Tech Stack (exact)
 
@@ -290,3 +290,142 @@ roaster-gate/
 - WebAuthn requires HTTPS in production.
 - No email verification on signup.
 - Supabase anon key exposed in client bundle.
+
+## 12. Key Implementation Details
+
+### db.js — Core Functions
+
+```js
+// Constants
+const QR_WINDOW_MS = 15000;        // 15-second QR rotation
+const QR_TOLERANCE_MS = 30000;     // 30-second validation tolerance (2x window)
+const RESET_CODE_TTL_MS = 600000;  // 10-minute reset code expiry
+
+// IP Detection
+async function getClientIP() {
+  // Try ipify API, fallback to simulation IP from localStorage
+}
+
+// QR Generation
+function generateQrToken(sessionId) {
+  const payload = { sessionId, timestamp: Date.now(), salt: randomBase64() };
+  return btoa(JSON.stringify(payload));
+}
+
+// QR Verification
+function verifyQrToken(token) {
+  const decoded = JSON.parse(atob(token));
+  // Validate structure, check session exists in DB
+  return { valid: true, payload: decoded };
+}
+
+// Subnet Check
+function verifySubnet(clientIP, subnet) {
+  const prefix = subnet.replace('.*', '');
+  return clientIP.startsWith(prefix);
+}
+
+// Biometric Verification (WebAuthn)
+async function verifyFingerprint(credentialId, userId) {
+  const assertion = await navigator.credentials.get({
+    publicKey: { challenge: newChallenge(), allowCredentials: [{ id: credentialId }] }
+  });
+  return assertion.id === credentialId;
+}
+
+// Full Attendance Pipeline
+async function verifyAndSubmitAttendance(token, studentId) {
+  // 1. Decode & validate QR token
+  // 2. Look up session → subject → subnet
+  // 3. Verify biometric (WebAuthn assertion)
+  // 4. Check QR age: |Date.now() - timestamp| < QR_TOLERANCE_MS
+  // 5. Check subnet: getClientIP() vs subject.subnet
+  // 6. Check duplicate: no existing attendance for studentId + sessionId
+  // 7. Insert attendance record + audit log
+}
+
+// Audit Logging
+async function insertAuditLog(level, message, details) {
+  await supabase.from('audit_logs').insert({
+    id: 'log_' + crypto.randomUUID(),
+    timestamp: Date.now(),
+    level, message, details
+  });
+}
+
+// Factory Reset
+async function factoryReset() {
+  // Delete from: attendance, sessions, audit_logs
+  // Update users: set registeredFingerprint = null
+}
+```
+
+### SimulationPanel.jsx — State Shape
+
+```js
+// localStorage key: 'sat_simulation'
+{
+  ip: '192.168.1.45',           // Current simulated IP
+  clockOffset: 0,               // Milliseconds offset from real time
+  spoofFingerprint: false,      // Simulate fingerprint mismatch
+  presets: {
+    classroomA: '192.168.1.45',
+    classroomB: '192.168.2.10',
+    home: '73.12.84.10'
+  }
+}
+```
+
+### QR Code Generation Details
+
+- Component: `QRCodeSVG` from `qrcode.react`
+- Value: base64 string from `generateQrToken(sessionId)`
+- Rotation: `setInterval` every 15000ms in TeacherDashboard
+- Countdown overlay: CSS animation synced to rotation interval
+- Token display in simulation panel: raw base64 string for copy/paste testing
+
+### WebAuthn Flow Details
+
+**Registration (StudentDashboard):**
+```js
+const credential = await navigator.credentials.create({
+  publicKey: {
+    challenge: new Uint8Array(32),
+    rp: { name: 'Roster-Gate' },
+    user: { id: userId, name: email, displayName: name },
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }], // ES256
+    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' }
+  }
+});
+// Store credential.id in users.registeredFingerprint
+```
+
+**Authentication (Attendance Submission):**
+```js
+const assertion = await navigator.credentials.get({
+  publicKey: {
+    challenge: new Uint8Array(32),
+    allowCredentials: [{ type: 'public-key', id: registeredFingerprint }],
+    userVerification: 'required'
+  }
+});
+// Verify assertion.id === registeredFingerprint
+```
+
+### EmailJS Password Reset Template
+
+Template variables (must match EmailJS dashboard):
+- `to_email` — recipient email
+- `reset_code` — 6-digit code
+- `app_name` — "Roster-Gate"
+
+## 13. Common Pitfalls to Avoid
+
+1. **Don't use react-router** — App.jsx handles view switching via `view` state
+2. **Don't hash passwords** — plaintext is documented and intentional for demo
+3. **Don't add RLS policies** — client-side queries with anon key
+4. **Don't change QR_WINDOW_MS** — 15000 is used throughout (generation, validation, simulation)
+5. **Don't use Supabase Auth** — custom users table with email/password
+6. **Don't forget localStorage persistence** for simulation state
+7. **Don't skip audit logging** on any security check failure
+8. **Don't use TypeScript** — project is JSX-only
