@@ -19,9 +19,12 @@ export default function ForgotPassword() {
 
     setIsSubmitting(true);
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo: `${window.location.origin}/reset-password`,
+      },
+    );
 
     if (resetError) {
       setError(resetError.message);
@@ -58,7 +61,10 @@ export default function ForgotPassword() {
 
             <form onSubmit={handleRequestCode} className="space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="reset-email" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                <label
+                  htmlFor="reset-email"
+                  className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider"
+                >
                   Email Address
                 </label>
                 <div className="relative">
@@ -89,7 +95,9 @@ export default function ForgotPassword() {
                 className="w-full py-3 px-4 bg-[#0e5b9e]/90 hover:bg-[#004b87] active:bg-[#063d6b] text-white rounded-lg shadow-lg shadow-sky-900/15 border border-white/20 font-semibold text-sm cursor-pointer transition-all duration-300 transform active:scale-98 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Sending code...</>
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Sending code...
+                  </>
                 ) : (
                   "Send Reset Code"
                 )}
@@ -105,7 +113,8 @@ export default function ForgotPassword() {
                 Check Your Email
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                We've sent a password reset link to your email. Click the link to set a new password.
+                We've sent a password reset link to your email. Click the link
+                to set a new password.
               </p>
             </div>
 
@@ -125,7 +134,7 @@ export default function ForgotPassword() {
                 Resend Email
               </button>
             </div>
-</>
+          </>
         )}
       </div>
     </div>
