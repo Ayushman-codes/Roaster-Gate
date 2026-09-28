@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Login from "./components/Login";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
@@ -6,21 +6,12 @@ import StudentDashboard from "./components/StudentDashboard";
 import TeacherDashboard from "./components/TeacherDashboard";
 import AdminDashboard from "./components/AdminDashboard";
 import SimulationPanel from "./components/SimulationPanel";
-import { supabase } from "./state/supabaseClient";
 import { LogOut } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [view, setView] = useState("login"); // login | forgotPassword | resetPassword
-
-  useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" && session) {
-        setView("resetPassword");
-      }
-    });
-  }, []);
 
   const triggerRefresh = () => {
     setRefreshKey(prev => prev + 1);

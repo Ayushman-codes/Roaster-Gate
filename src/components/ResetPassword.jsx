@@ -1,5 +1,6 @@
+// ResetPassword Component - Updated to use custom email module
 import { useState, useEffect } from "react";
-import { supabase } from "../state/supabaseClient";
+import { validateResetToken, completePasswordReset } from "../services/email";
 import { Lock, Loader2, CheckCircle, AlertCircle, Eye, EyeOff } from "lucide-react";
 
 export default function ResetPassword({ onBack }) {
@@ -10,13 +11,32 @@ export default function ResetPassword({ onBack }) {
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tokenValid, setTokenValid] = useState(false);
 
+  // Extract token from URL
+  const getTokenFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('token');
+  };
+
+  // Validate token on mount
   useEffect(() => {
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) {
+    const token = getTokenFromUrl();
+    if (!token) {
+      setError("Invalid or missing reset token.");
+      setLoading(false);
+      return;
+    }
+
+    validateResetToken(token)
+      .then(() => {
+        setTokenValid(true);
         setLoading(false);
-      }
-    });
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, []);
 
   const handleSubmit = async (e) => {
@@ -39,20 +59,22 @@ export default function ResetPassword({ onBack }) {
       return;
     }
 
-    setIsSubmitting(true);
-
-    const { error: updateError } = await supabase.auth.updateUser({
-      password,
-    });
-
-    if (updateError) {
-      setError(updateError.message);
-      setIsSubmitting(false);
+    const token = getTokenFromUrl();
+    if (!token) {
+      setError("Reset token missing. Please request a new reset link.");
       return;
     }
 
-    setIsSubmitting(false);
-    setSuccess(true);
+    setIsSubmitting(true);
+
+    try {
+      await completePasswordReset(token, password);
+      setIsSubmitting(false);
+      setSuccess(true);
+    } catch (err) {
+      setError(err.message);
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -62,7 +84,29 @@ export default function ResetPassword({ onBack }) {
           <div className="flex justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-[#0e5b9e]" />
           </div>
-          <p className="text-center text-slate-500 dark:text-slate-400">Loading...</p>
+          <p className="text-center text-slate-500 dark:text-slate-400">Validating reset link...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tokenValid) {
+    return (
+      <div className="min-h-[90svh] flex flex-col justify-center items-center py-10 px-4">
+        <div className="w-full max-w-md glass rounded-2xl overflow-hidden p-6 sm:p-8 space-y-6 text-center">
+          <AlertCircle className="h-12 w-12 text-rose-500 mx-auto" />
+          <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200">
+            Invalid Reset Link
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            {error || "This password reset link is invalid or has expired."}
+          </p>
+          <button
+            onClick={onBack}
+            className="w-full py-3 px-4 bg-[#0e5b9e]/90 hover:bg-[#004b87] active:bg-[#063d6b] text-white rounded-lg shadow-lg shadow-sky-900/15 border border-white/20 font-semibold text-sm cursor-pointer transition-all duration-300 flex items-center justify-center gap-2 mt-4"
+          >
+            Back to Sign In
+          </button>
         </div>
       </div>
     );

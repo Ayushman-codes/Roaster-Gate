@@ -1,5 +1,6 @@
+// ForgotPassword Component - Updated to use custom email module
 import { useState } from "react";
-import { supabase } from "../state/supabaseClient";
+import { requestPasswordReset } from "../services/email";
 import { ShieldAlert, Key, Mail, Loader2 } from "lucide-react";
 
 export default function ForgotPassword() {
@@ -19,21 +20,14 @@ export default function ForgotPassword() {
 
     setIsSubmitting(true);
 
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-      email,
-      {
-        redirectTo: `${window.location.origin}/reset-password`,
-      },
-    );
-
-    if (resetError) {
-      setError(resetError.message);
+    try {
+      await requestPasswordReset(email);
       setIsSubmitting(false);
-      return;
+      setStep("verify");
+    } catch (err) {
+      setError(err.message);
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
-    setStep("verify");
   };
 
   return (
@@ -55,7 +49,7 @@ export default function ForgotPassword() {
                 Forgot Password
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                Enter your email and we'll send you a reset code
+                Enter your email and we'll send you a reset link
               </p>
             </div>
 
@@ -96,10 +90,10 @@ export default function ForgotPassword() {
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Sending code...
+                    <Loader2 className="h-4 w-4 animate-spin" /> Sending link...
                   </>
                 ) : (
-                  "Send Reset Code"
+                  "Send Reset Link"
                 )}
               </button>
             </form>
@@ -114,7 +108,7 @@ export default function ForgotPassword() {
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 We've sent a password reset link to your email. Click the link
-                to set a new password.
+                to set a new password. The link expires in 1 hour.
               </p>
             </div>
 

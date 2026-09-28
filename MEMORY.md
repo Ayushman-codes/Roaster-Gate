@@ -2,20 +2,6 @@
 
 ## Project Memory
 
-### Build Log
-
-| Phase | Status | Date | Notes |
-|-------|--------|------|-------|
-| 0 — Init | Done | 2026-07-13 | Vite scaffold, Tailwind CSS v4, deps installed |
-| 1 — Auth & DB | Done | 2026-07-13 | Supabase client, users table, login form |
-| 2 — Student Portal | Done | 2026-07-13 | Biometric registration, QR scanner, attendance log |
-| 3 — Teacher Portal | Done | 2026-07-13 | Session management, QR broadcast, roster grid |
-| 4 — Admin Portal | Done | 2026-07-13 | User management, audit logs, danger zone |
-| 5 — Security Engine | Done | 2026-07-13 | QR generation, subnet check, fingerprint verify |
-| 6 — Simulation Panel | Done | 2026-07-13 | IP spoof, clock drift, live diagnostics |
-| 7 — Password Reset | Done | 2026-07-23 | EmailJS integration, 6-digit code flow |
-| 8 — Polish | Done | 2026-07-23 | Error states, loading spinners, clean build |
-
 ### Files Created
 
 ```

@@ -18,9 +18,8 @@ Includes a simulation sandbox for live security demos.
 Built for academic (BCA final-year) evaluation — prioritize working security pipeline
 over exhaustive edge-case handling.
 
-**Non-goals (do not build unless explicitly asked):** real-time multi-user collaboration,
-video recording, calendar integration, custom backend server, production-grade password
-hashing, mobile native app, Row Level Security policies.
+**Non-goals:** real-time multi-user collaboration, video recording, calendar integration,
+custom backend server, production-grade password hashing, mobile native app, Row Level Security policies.
 
 ## 2. Tech Stack (exact)
 
